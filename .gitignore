@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Datasets
+data/raw/
+data/processed/
+
+# Model weights
+*.pt
+*.onnx
+
+# Generated outputs
+outputs/
+runs/
+
+# Environment
+.env
+
+# OS / IDE
+.vscode/
+Thumbs.db
