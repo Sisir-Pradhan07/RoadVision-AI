@@ -1,6 +1,8 @@
 from pathlib import Path
+
 from ultralytics import YOLO
 
+from reports.report_generator import generate_report, save_report
 from src.analysis.road_health import calculate_road_health
 
 
@@ -71,3 +73,18 @@ if __name__ == "__main__":
 
     for damage, count in health["damage_breakdown"].items():
         print(f"- {damage}: {count}")
+
+    # Generate structured report
+    report = generate_report(
+        detections=detections,
+        health=health,
+        image_name=image,
+    )
+
+    # Save report
+    report_path = save_report(
+        report,
+        f"reports/{Path(image).stem}_report.json",
+    )
+
+    print(f"\nReport saved to: {report_path}")

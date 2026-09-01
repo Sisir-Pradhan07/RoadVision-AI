@@ -21,3 +21,9 @@ runs/
 # OS / IDE
 .vscode/
 Thumbs.db
+
+# Generated reports
+reports/*.json
+
+# Test images
+test_road.jpg
