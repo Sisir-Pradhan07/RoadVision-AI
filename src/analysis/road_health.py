@@ -1,4 +1,5 @@
 from collections import Counter
+from math import sqrt
 
 
 DAMAGE_WEIGHTS = {
@@ -12,7 +13,15 @@ DAMAGE_WEIGHTS = {
 
 def calculate_road_health(detections):
     """
-    Calculate a 0-100 Road Health Score from YOLO detections.
+    Calculate an AI-derived road health score.
+
+    The scoring uses:
+    - defect type severity
+    - detection confidence
+    - diminishing returns for repeated defects of the same type
+
+    This is a prototype scoring system and is not an
+    engineering or government road-condition standard.
     """
 
     if not detections:
@@ -26,38 +35,67 @@ def calculate_road_health(detections):
         }
 
     breakdown = Counter()
-    total_penalty = 0
+
+    # Group confidence values by defect type
+    confidence_by_type = {}
 
     for detection in detections:
         damage_type = detection["class"]
-        confidence = detection["confidence"]
+        confidence = float(detection["confidence"])
+
+        breakdown[damage_type] += 1
+
+        if damage_type not in confidence_by_type:
+            confidence_by_type[damage_type] = []
+
+        confidence_by_type[damage_type].append(confidence)
+
+    total_penalty = 0.0
+
+    for damage_type, confidences in confidence_by_type.items():
 
         weight = DAMAGE_WEIGHTS.get(damage_type, 7)
 
-        # Confidence-weighted damage penalty
-        penalty = weight * confidence
+        count = len(confidences)
+
+        # Average confidence represents how strongly
+        # the model believes this defect type is present.
+        average_confidence = sum(confidences) / count
+
+        # Diminishing returns:
+        # 1 defect  -> 1.00
+        # 2 defects -> 1.41
+        # 4 defects -> 2.00
+        # 9 defects -> 3.00
+        #
+        # This prevents repeated video tracks from
+        # destroying the score too quickly.
+        count_factor = sqrt(count)
+
+        penalty = weight * average_confidence * count_factor
 
         total_penalty += penalty
-        breakdown[damage_type] += 1
 
-    # Additional penalty for repeated defects
-    for damage_type, count in breakdown.items():
-        if count > 1:
-            total_penalty += (count - 1) * (
-                DAMAGE_WEIGHTS.get(damage_type, 7) * 0.5
-            )
-
-    score = max(0, min(100, round(100 - total_penalty)))
+    score = max(
+        0,
+        min(
+            100,
+            round(100 - total_penalty)
+        )
+    )
 
     if score >= 80:
         severity = "Good"
         priority = "Low"
+
     elif score >= 60:
         severity = "Moderate"
         priority = "Medium"
+
     elif score >= 40:
         severity = "Poor"
         priority = "High"
+
     else:
         severity = "Critical"
         priority = "Critical"
