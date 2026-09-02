@@ -27,3 +27,13 @@ reports/*.json
 
 # Test images
 test_road.jpg
+
+# Test videos
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.m4v
+*.mpeg
+*.mpg
