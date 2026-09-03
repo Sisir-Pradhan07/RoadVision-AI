@@ -183,8 +183,8 @@ def analyze_video(video_path: str, confidence: float = 0.25):
     )
 
     fourcc = cv2.VideoWriter_fourcc(
-        *"mp4v"
-    )
+       *"avc1"
+)
 
     writer = cv2.VideoWriter(
         str(output_path),
