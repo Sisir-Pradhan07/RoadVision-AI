@@ -83,43 +83,43 @@ function App() {
   };
 
   const handleVideoAnalysis = async () => {
-  if (!file || !isVideo) {
-    return;
-  }
-
-  setIsAnalyzing(true);
-  setError("");
-  setAnalysisResult(null);
-
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/analyze/video`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Video analysis failed.");
+    if (!file || !isVideo) {
+      return;
     }
 
-    const data = await response.json();
+    setIsAnalyzing(true);
+    setError("");
+    setAnalysisResult(null);
 
-    setAnalysisResult(data);
-  } catch (err) {
-    console.error(err);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-    setError(
-      "Unable to analyze the video. Make sure the RoadVision backend is running."
-    );
-  } finally {
-    setIsAnalyzing(false);
-  }
-};
+      const response = await fetch(
+        `${API_BASE_URL}/api/analyze/video`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Video analysis failed.");
+      }
+
+      const data = await response.json();
+
+      setAnalysisResult(data);
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        "Unable to analyze the video. Make sure the RoadVision backend is running."
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const clearInspection = () => {
     setFile(null);
@@ -162,6 +162,242 @@ function App() {
       <main className="dashboard">
         {/* HERO */}
         <section className="hero">
+          {/* REALISTIC ROAD VISUAL */}
+          <div className="hero-road" aria-hidden="true">
+            <svg
+              viewBox="0 0 900 430"
+              preserveAspectRatio="xMidYMid slice"
+            >
+              <defs>
+                <linearGradient
+                  id="roadSky"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0%"
+                    stopColor="#10151d"
+                    stopOpacity="0.15"
+                  />
+
+                  <stop
+                    offset="55%"
+                    stopColor="#090c11"
+                    stopOpacity="0.35"
+                  />
+
+                  <stop
+                    offset="100%"
+                    stopColor="#050609"
+                    stopOpacity="0.95"
+                  />
+                </linearGradient>
+
+                <linearGradient
+                  id="roadSurface"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0%"
+                    stopColor="#25272a"
+                  />
+
+                  <stop
+                    offset="35%"
+                    stopColor="#15171a"
+                  />
+
+                  <stop
+                    offset="100%"
+                    stopColor="#08090b"
+                  />
+                </linearGradient>
+
+                <linearGradient
+                  id="roadGlow"
+                  x1="0"
+                  y1="0"
+                  x2="1"
+                  y2="0"
+                >
+                  <stop
+                    offset="0%"
+                    stopColor="#ff7b25"
+                    stopOpacity="0"
+                  />
+
+                  <stop
+                    offset="50%"
+                    stopColor="#ff8a3d"
+                    stopOpacity="0.55"
+                  />
+
+                  <stop
+                    offset="100%"
+                    stopColor="#ff7b25"
+                    stopOpacity="0"
+                  />
+                </linearGradient>
+
+                <filter id="softGlow">
+                  <feGaussianBlur stdDeviation="7" />
+                </filter>
+
+                <filter id="roadBlur">
+                  <feGaussianBlur stdDeviation="1.5" />
+                </filter>
+              </defs>
+
+              {/* Distant atmosphere */}
+              <rect
+                width="900"
+                height="430"
+                fill="url(#roadSky)"
+              />
+
+              {/* Horizon illumination */}
+              <ellipse
+                cx="650"
+                cy="175"
+                rx="230"
+                ry="75"
+                fill="#ff7628"
+                opacity="0.09"
+                filter="url(#softGlow)"
+              />
+
+              {/* Main asphalt road */}
+              <path
+                d="M420 165 L520 165 L900 430 L0 430 Z"
+                fill="url(#roadSurface)"
+              />
+
+              {/* Left road shoulder */}
+              <path
+                d="M420 165 L390 165 L0 430 L42 430 Z"
+                fill="#0d0f12"
+              />
+
+              {/* Right road shoulder */}
+              <path
+                d="M520 165 L548 165 L900 430 L858 430 Z"
+                fill="#0d0f12"
+              />
+
+              {/* Left road edge */}
+              <path
+                d="M420 166 L40 430"
+                fill="none"
+                stroke="#d8d9d7"
+                strokeWidth="3"
+                opacity="0.42"
+              />
+
+              {/* Right road edge */}
+              <path
+                d="M520 166 L860 430"
+                fill="none"
+                stroke="#d8d9d7"
+                strokeWidth="3"
+                opacity="0.42"
+              />
+
+              {/* Center lane markings */}
+              <path
+                d="M470 166 L465 195"
+                stroke="#f5c45b"
+                strokeWidth="4"
+                opacity="0.8"
+              />
+
+              <path
+                d="M465 215 L455 250"
+                stroke="#f5c45b"
+                strokeWidth="6"
+                opacity="0.75"
+              />
+
+              <path
+                d="M450 275 L430 330"
+                stroke="#f5c45b"
+                strokeWidth="8"
+                opacity="0.65"
+              />
+
+              <path
+                d="M420 360 L390 430"
+                stroke="#f5c45b"
+                strokeWidth="11"
+                opacity="0.48"
+              />
+
+              {/* Subtle road texture */}
+              <path
+                d="M250 390 L650 390"
+                stroke="#ffffff"
+                strokeWidth="1"
+                opacity="0.035"
+              />
+
+              <path
+                d="M190 410 L710 410"
+                stroke="#ffffff"
+                strokeWidth="1"
+                opacity="0.025"
+              />
+
+              {/* Orange AI inspection illumination */}
+              <path
+                d="M470 175 C570 205 690 265 835 420"
+                fill="none"
+                stroke="url(#roadGlow)"
+                strokeWidth="16"
+                opacity="0.22"
+                filter="url(#softGlow)"
+              />
+
+              <path
+                d="M470 175 C570 205 690 265 835 420"
+                fill="none"
+                stroke="#ff8a3d"
+                strokeWidth="2"
+                opacity="0.38"
+                filter="url(#roadBlur)"
+              />
+
+              {/* Distant inspection lights */}
+              <circle
+                cx="455"
+                cy="174"
+                r="2"
+                fill="#ffb15c"
+                opacity="0.8"
+              />
+
+              <circle
+                cx="487"
+                cy="174"
+                r="2"
+                fill="#ffb15c"
+                opacity="0.65"
+              />
+
+              {/* Foreground atmospheric fade */}
+              <rect
+                x="0"
+                y="0"
+                width="900"
+                height="430"
+                fill="url(#roadSky)"
+              />
+            </svg>
+          </div>
+
           <div className="hero-content">
             <div className="eyebrow">
               <span className="eyebrow-line" />
@@ -211,7 +447,10 @@ function App() {
               <small>AI inspection ready</small>
             </div>
 
-            <ArrowUpRight className="engine-arrow" size={20} />
+            <ArrowUpRight
+              className="engine-arrow"
+              size={20}
+            />
           </div>
         </section>
 
@@ -219,7 +458,10 @@ function App() {
         <section className="inspection-section">
           <div className="section-heading">
             <div>
-              <span className="section-label">01 / NEW INSPECTION</span>
+              <span className="section-label">
+                01 / NEW INSPECTION
+              </span>
+
               <h3>Upload Road Media</h3>
             </div>
 
@@ -238,8 +480,13 @@ function App() {
 
               <motion.div
                 className="upload-icon"
-                whileHover={{ scale: 1.08, rotate: 2 }}
-                transition={{ duration: 0.2 }}
+                whileHover={{
+                  scale: 1.08,
+                  rotate: 2,
+                }}
+                transition={{
+                  duration: 0.2,
+                }}
               >
                 <Upload size={28} />
               </motion.div>
@@ -266,8 +513,14 @@ function App() {
             {file && (
               <motion.div
                 className="selected-file"
-                initial={{ opacity: 0, x: 15 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{
+                  opacity: 0,
+                  x: 15,
+                }}
+                animate={{
+                  opacity: 1,
+                  x: 0,
+                }}
               >
                 <div className="selected-file-icon">
                   {isImage ? (
@@ -279,7 +532,9 @@ function App() {
 
                 <div className="selected-file-info">
                   <span>SELECTED MEDIA</span>
+
                   <strong>{file.name}</strong>
+
                   <small>
                     {(file.size / (1024 * 1024)).toFixed(2)} MB
                   </small>
@@ -302,8 +557,12 @@ function App() {
               className="analyze-button"
               onClick={handleImageAnalysis}
               disabled={isAnalyzing}
-              whileHover={!isAnalyzing ? { y: -2 } : {}}
-              whileTap={!isAnalyzing ? { scale: 0.98 } : {}}
+              whileHover={
+                !isAnalyzing ? { y: -2 } : {}
+              }
+              whileTap={
+                !isAnalyzing ? { scale: 0.98 } : {}
+              }
             >
               {isAnalyzing ? (
                 <>
@@ -321,33 +580,43 @@ function App() {
           )}
 
           {file && isVideo && (
-  <motion.button
-    className="analyze-button"
-    onClick={handleVideoAnalysis}
-    disabled={isAnalyzing}
-    whileHover={!isAnalyzing ? { y: -2 } : {}}
-    whileTap={!isAnalyzing ? { scale: 0.98 } : {}}
-  >
-    {isAnalyzing ? (
-      <>
-        <span className="spinner" />
-        Processing Video...
-      </>
-    ) : (
-      <>
-        <Video size={19} />
-        Analyze Video
-        <ArrowUpRight size={18} />
-      </>
-    )}
-  </motion.button>
-)}
+            <motion.button
+              className="analyze-button"
+              onClick={handleVideoAnalysis}
+              disabled={isAnalyzing}
+              whileHover={
+                !isAnalyzing ? { y: -2 } : {}
+              }
+              whileTap={
+                !isAnalyzing ? { scale: 0.98 } : {}
+              }
+            >
+              {isAnalyzing ? (
+                <>
+                  <span className="spinner" />
+                  Processing Video...
+                </>
+              ) : (
+                <>
+                  <Video size={19} />
+                  Analyze Video
+                  <ArrowUpRight size={18} />
+                </>
+              )}
+            </motion.button>
+          )}
 
           {error && (
             <motion.div
               className="error-message"
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{
+                opacity: 0,
+                y: -5,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
             >
               <AlertTriangle size={18} />
               <span>{error}</span>
@@ -370,7 +639,10 @@ function App() {
               <strong>YOLO V4</strong>
             </div>
 
-            <CheckCircle2 className="module-check" size={18} />
+            <CheckCircle2
+              className="module-check"
+              size={18}
+            />
           </motion.div>
 
           <motion.div
@@ -386,7 +658,10 @@ function App() {
               <strong>ByteTrack</strong>
             </div>
 
-            <CheckCircle2 className="module-check" size={18} />
+            <CheckCircle2
+              className="module-check"
+              size={18}
+            />
           </motion.div>
 
           <motion.div
@@ -402,7 +677,10 @@ function App() {
               <strong>AI Score</strong>
             </div>
 
-            <CheckCircle2 className="module-check" size={18} />
+            <CheckCircle2
+              className="module-check"
+              size={18}
+            />
           </motion.div>
 
           <motion.div
@@ -418,7 +696,10 @@ function App() {
               <strong>Automated</strong>
             </div>
 
-            <CheckCircle2 className="module-check" size={18} />
+            <CheckCircle2
+              className="module-check"
+              size={18}
+            />
           </motion.div>
         </section>
 
@@ -426,7 +707,10 @@ function App() {
         <section className="results-section">
           <div className="section-heading result-heading">
             <div>
-              <span className="section-label">02 / INSPECTION RESULTS</span>
+              <span className="section-label">
+                02 / INSPECTION RESULTS
+              </span>
+
               <h3>Road Analysis</h3>
             </div>
 
@@ -447,8 +731,9 @@ function App() {
               <h4>Ready for inspection</h4>
 
               <p>
-                Upload a road image or video above and run an AI inspection
-                to see detected defects and road health.
+                Upload a road image or video above and run an
+                AI inspection to see detected defects and road
+                health.
               </p>
             </div>
           )}
@@ -473,9 +758,17 @@ function App() {
           {analysisResult && !isAnalyzing && (
             <motion.div
               className="results-container"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
+              initial={{
+                opacity: 0,
+                y: 15,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
+              transition={{
+                duration: 0.4,
+              }}
             >
               {/* MEDIA + HEALTH */}
               <div className="main-result-grid">
@@ -483,7 +776,11 @@ function App() {
                   <div className="card-top">
                     <div>
                       <span>ANNOTATED MEDIA</span>
-                      <strong>{analysisResult.filename}</strong>
+
+                      <strong>
+                        {analysisResult.filename ||
+                          analysisResult.video}
+                      </strong>
                     </div>
 
                     <div className="media-badge">
@@ -492,30 +789,35 @@ function App() {
                     </div>
                   </div>
 
-                 <div className="image-wrapper">
-  {analysisResult.output_image ? (
-    <img
-      src={`${API_BASE_URL}${analysisResult.output_image}`}
-      alt="RoadVision AI annotated road analysis"
-    />
-  ) : analysisResult.output_video ? (
-    <video
-      src={`${API_BASE_URL}${analysisResult.output_video}`}
-      controls
-      playsInline
-      className="result-video"
-    >
-      Your browser does not support video playback.
-    </video>
-  ) : null}
-</div>
+                  <div className="image-wrapper">
+                    {analysisResult.output_image ? (
+                      <img
+                        src={`${API_BASE_URL}${analysisResult.output_image}`}
+                        alt="RoadVision AI annotated road analysis"
+                      />
+                    ) : analysisResult.output_video ? (
+                      <video
+                        src={`${API_BASE_URL}${analysisResult.output_video}`}
+                        controls
+                        playsInline
+                        className="result-video"
+                      >
+                        Your browser does not support video
+                        playback.
+                      </video>
+                    ) : null}
+                  </div>
                 </div>
 
+                {/* HEALTH */}
                 <div className="health-card">
                   <div className="card-top">
                     <div>
                       <span>ROAD HEALTH</span>
-                      <strong>AI Condition Assessment</strong>
+
+                      <strong>
+                        AI Condition Assessment
+                      </strong>
                     </div>
                   </div>
 
@@ -524,13 +826,16 @@ function App() {
                       analysisResult.health.score
                     )}`}
                     style={{
-                      "--score": `${analysisResult.health.score * 3.6}deg`,
+                      "--score": `${
+                        analysisResult.health.score * 3.6
+                      }deg`,
                     }}
                   >
                     <div className="score-inner">
                       <strong>
                         {analysisResult.health.score}
                       </strong>
+
                       <span>/ 100</span>
                     </div>
                   </div>
@@ -545,18 +850,22 @@ function App() {
                   </div>
 
                   <p className="health-interpretation">
-  {analysisResult.health.severity === "Good"
-    ? "Road condition is generally good and requires low maintenance priority."
-    : analysisResult.health.severity === "Moderate"
-    ? "Road condition requires planned inspection and maintenance."
-    : analysisResult.health.severity === "Poor"
-    ? "Road condition requires high-priority inspection and maintenance."
-    : "Road condition requires critical attention and immediate inspection."}
-</p>
+                    {analysisResult.health.severity ===
+                    "Good"
+                      ? "Road condition is generally good and requires low maintenance priority."
+                      : analysisResult.health.severity ===
+                        "Moderate"
+                      ? "Road condition requires planned inspection and maintenance."
+                      : analysisResult.health.severity ===
+                        "Poor"
+                      ? "Road condition requires high-priority inspection and maintenance."
+                      : "Road condition requires critical attention and immediate inspection."}
+                  </p>
 
                   <div className="health-stats">
                     <div>
                       <span>Maintenance Priority</span>
+
                       <strong>
                         {analysisResult.health.priority}
                       </strong>
@@ -564,6 +873,7 @@ function App() {
 
                     <div>
                       <span>Total Defects</span>
+
                       <strong>
                         {analysisResult.health.damage_count}
                       </strong>
@@ -572,6 +882,7 @@ function App() {
 
                   <div className="penalty-row">
                     <span>AI damage penalty</span>
+
                     <strong>
                       -{analysisResult.health.penalty}
                     </strong>
@@ -584,6 +895,7 @@ function App() {
                 <div className="breakdown-header">
                   <div>
                     <span>DEFECT BREAKDOWN</span>
+
                     <strong>
                       Detected road condition issues
                     </strong>
@@ -593,41 +905,52 @@ function App() {
                     <strong>
                       {analysisResult.health.damage_count}
                     </strong>
+
                     <span>Total</span>
                   </div>
                 </div>
 
                 <div className="defect-grid">
                   {Object.entries(
-  analysisResult.health.damage_breakdown
-).map(([damage, count]) => {
-  const total = analysisResult.health.damage_count;
-  const percentage = Math.round((count / total) * 100);
+                    analysisResult.health.damage_breakdown
+                  ).map(([damage, count]) => {
+                    const total =
+                      analysisResult.health.damage_count;
 
-  return (
-    <motion.div
-      className="defect-card"
-      key={damage}
-      whileHover={{ y: -3 }}
-    >
-      <div className="defect-number">
-        {count}
-      </div>
+                    const percentage =
+                      total > 0
+                        ? Math.round((count / total) * 100)
+                        : 0;
 
-      <div className="defect-info">
-        <span>{damage}</span>
-        <small>{percentage}% of detected defects</small>
+                    return (
+                      <motion.div
+                        className="defect-card"
+                        key={damage}
+                        whileHover={{ y: -3 }}
+                      >
+                        <div className="defect-number">
+                          {count}
+                        </div>
 
-        <div className="defect-bar">
-          <div
-            className="defect-bar-fill"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-      </div>
-    </motion.div>
-  );
-})}
+                        <div className="defect-info">
+                          <span>{damage}</span>
+
+                          <small>
+                            {percentage}% of detected defects
+                          </small>
+
+                          <div className="defect-bar">
+                            <div
+                              className="defect-bar-fill"
+                              style={{
+                                width: `${percentage}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
@@ -648,7 +971,10 @@ function App() {
 
               <div>
                 <strong>Defect Detection</strong>
-                <span>5 trained road-defect classes</span>
+
+                <span>
+                  5 trained road-defect classes
+                </span>
               </div>
             </div>
 
@@ -659,6 +985,7 @@ function App() {
 
               <div>
                 <strong>Road Health</strong>
+
                 <span>
                   AI-derived condition assessment
                 </span>
@@ -672,6 +999,7 @@ function App() {
 
               <div>
                 <strong>Automated Reports</strong>
+
                 <span>
                   Inspection results in JSON format
                 </span>
@@ -692,8 +1020,9 @@ function App() {
               <h4>Intelligent Road Monitoring</h4>
 
               <p>
-                AI-assisted inspection designed to help identify
-                road defects and prioritize maintenance decisions.
+                AI-assisted inspection designed to help
+                identify road defects and prioritize
+                maintenance decisions.
               </p>
             </div>
 
