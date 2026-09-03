@@ -254,7 +254,7 @@ function App() {
                 {file
                   ? isImage
                     ? "Image selected and ready for AI inspection"
-                    : "Video selected — video analysis coming next"
+                    : "Video selected and ready for AI inspection"
                   : "Drag & drop your file or browse from your device"}
               </p>
 
@@ -544,6 +544,16 @@ function App() {
                     {analysisResult.health.severity}
                   </div>
 
+                  <p className="health-interpretation">
+  {analysisResult.health.severity === "Good"
+    ? "Road condition is generally good and requires low maintenance priority."
+    : analysisResult.health.severity === "Moderate"
+    ? "Road condition requires planned inspection and maintenance."
+    : analysisResult.health.severity === "Poor"
+    ? "Road condition requires high-priority inspection and maintenance."
+    : "Road condition requires critical attention and immediate inspection."}
+</p>
+
                   <div className="health-stats">
                     <div>
                       <span>Maintenance Priority</span>
@@ -589,23 +599,35 @@ function App() {
 
                 <div className="defect-grid">
                   {Object.entries(
-                    analysisResult.health.damage_breakdown
-                  ).map(([damage, count]) => (
-                    <motion.div
-                      className="defect-card"
-                      key={damage}
-                      whileHover={{ y: -3 }}
-                    >
-                      <div className="defect-number">
-                        {count}
-                      </div>
+  analysisResult.health.damage_breakdown
+).map(([damage, count]) => {
+  const total = analysisResult.health.damage_count;
+  const percentage = Math.round((count / total) * 100);
 
-                      <div className="defect-info">
-                        <span>{damage}</span>
-                        <small>Detected instances</small>
-                      </div>
-                    </motion.div>
-                  ))}
+  return (
+    <motion.div
+      className="defect-card"
+      key={damage}
+      whileHover={{ y: -3 }}
+    >
+      <div className="defect-number">
+        {count}
+      </div>
+
+      <div className="defect-info">
+        <span>{damage}</span>
+        <small>{percentage}% of detected defects</small>
+
+        <div className="defect-bar">
+          <div
+            className="defect-bar-fill"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+})}
                 </div>
               </div>
             </motion.div>
