@@ -7,7 +7,7 @@ from reports.report_generator import generate_report, save_report
 from src.analysis.road_health import calculate_road_health
 
 
-MODEL_PATH = Path("models/detection/roadvision_v3.pt")
+MODEL_PATH = Path("models/detection/roadvision_v4.pt")
 OUTPUT_DIR = Path("outputs/predictions").resolve()
 
 
