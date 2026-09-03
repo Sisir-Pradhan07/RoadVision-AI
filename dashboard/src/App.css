@@ -56,13 +56,74 @@ button {
 
 .app {
   min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+
   background:
     radial-gradient(
-      circle at 75% 5%,
-      rgba(255, 138, 61, 0.07),
-      transparent 28%
+      circle at 78% 8%,
+      rgba(255, 111, 32, 0.105),
+      transparent 26%
     ),
-    var(--bg);
+    radial-gradient(
+      circle at 8% 42%,
+      rgba(34, 67, 105, 0.10),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(255, 138, 61, 0.045),
+      transparent 32%
+    ),
+    #08090c;
+}
+
+.app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent 49.95%,
+      rgba(255, 255, 255, 0.018) 50%,
+      transparent 50.05%
+    ),
+    linear-gradient(
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px
+    );
+
+  background-size: 100% 100%, 100% 80px;
+
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.45),
+    transparent 70%
+  );
+
+  opacity: 0.35;
+}
+
+.app::after {
+  content: "";
+
+  position: fixed;
+  width: 520px;
+  height: 520px;
+
+  right: -220px;
+  top: 180px;
+
+  pointer-events: none;
+
+  border-radius: 50%;
+
+  background: rgba(255, 103, 28, 0.055);
+  filter: blur(100px);
 }
 
 /* =========================
@@ -175,12 +236,149 @@ button {
 ========================= */
 
 .hero {
+  position: relative;
+
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 40px;
 
+  min-height: 390px;
   margin-bottom: 52px;
+
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 58px 48px;
+
+  background:
+  linear-gradient(
+    90deg,
+    rgba(7, 9, 13, 0.99) 0%,
+    rgba(7, 9, 13, 0.94) 42%,
+    rgba(7, 9, 13, 0.72) 72%,
+    rgba(7, 9, 13, 0.48) 100%
+  );
+}
+
+.hero::before {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  pointer-events: none;
+
+  /* Perspective road */
+  background:
+    /* center lane markings */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 34px,
+      rgba(255, 190, 80, 0.48) 34px 43px,
+      transparent 43px 78px
+    );
+
+  width: 420px;
+  height: 330px;
+
+  right: 90px;
+  bottom: -145px;
+
+  transform:
+    perspective(700px)
+    rotateX(62deg)
+    rotateZ(-1deg);
+
+  transform-origin: center bottom;
+
+  opacity: 0.42;
+
+  clip-path: polygon(
+    38% 0%,
+    62% 0%,
+    100% 100%,
+    0% 100%
+  );
+
+  background-color: rgba(35, 36, 39, 0.38);
+
+  box-shadow:
+    0 -20px 80px rgba(255, 91, 25, 0.08);
+}
+
+.hero::after {
+  content: "";
+
+  position: absolute;
+
+  width: 850px;
+  height: 500px;
+
+  right: -20px;
+  bottom: -220px;
+
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      ellipse at 50% 55%,
+      rgba(255, 100, 28, 0.20) 0%,
+      rgba(255, 100, 28, 0.09) 24%,
+      rgba(255, 100, 28, 0.025) 43%,
+      transparent 70%
+    );
+
+  filter: blur(28px);
+
+  opacity: 0.85;
+}
+
+.hero-engine::before {
+  content: "";
+
+  position: absolute;
+
+  width: 520px;
+  height: 260px;
+
+  left: -430px;
+  top: 70px;
+
+  pointer-events: none;
+
+  border-top: 2px solid rgba(255, 126, 35, 0.28);
+  border-radius: 50%;
+
+  transform: rotate(-13deg);
+
+  filter: blur(1px);
+}
+
+.hero-engine::after {
+  content: "";
+
+  position: absolute;
+
+  width: 500px;
+  height: 220px;
+
+  left: -400px;
+  top: 105px;
+
+  pointer-events: none;
+
+  border-top: 1px solid rgba(255, 190, 80, 0.16);
+  border-radius: 50%;
+
+  transform: rotate(-13deg);
+
+  filter: blur(1px);
+}
+
+.hero-content,
+.hero-engine {
+  position: relative;
+  z-index: 2;
 }
 
 .hero-content {
@@ -211,10 +409,13 @@ button {
 .hero h2 {
   margin: 0;
 
-  font-size: clamp(42px, 5vw, 72px);
+  font-size: clamp(44px, 5vw, 72px);
   line-height: 0.98;
   letter-spacing: -3.5px;
   font-weight: 780;
+
+  text-shadow:
+    0 0 45px rgba(255, 138, 61, 0.055);
 }
 
 .hero h2 span {
@@ -272,7 +473,7 @@ button {
 
   padding: 19px;
 
-  overflow: hidden;
+  overflow: visible;
 
   border: 1px solid var(--border-orange);
   border-radius: 16px;
@@ -903,12 +1104,46 @@ button {
 .health-card,
 .breakdown-card,
 .info-card {
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  position: relative;
 
-  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.035),
+      rgba(255, 255, 255, 0.012)
+    );
+
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
 
   overflow: hidden;
+}
+
+.media-card::before,
+.health-card::before,
+.breakdown-card::before,
+.info-card::before {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+
+  height: 1px;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 138, 61, 0.28),
+    transparent
+  );
+
+  opacity: 0.7;
 }
 
 .media-card {
