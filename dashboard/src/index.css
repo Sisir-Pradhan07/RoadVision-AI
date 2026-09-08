@@ -14,7 +14,27 @@
 }
 
 html {
-  background: #080612;
+  min-width: 320px;
+  min-height: 100%;
+  background:
+    radial-gradient(
+      circle at 8% 8%,
+      rgba(124, 58, 237, 0.22),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 90% 8%,
+      rgba(236, 72, 153, 0.18),
+      transparent 26%
+    ),
+    linear-gradient(
+      135deg,
+      #070611 0%,
+      #0d0920 30%,
+      #120a24 55%,
+      #090711 100%
+    );
+
   scroll-behavior: smooth;
 }
 
@@ -23,7 +43,22 @@ body {
   min-width: 320px;
   min-height: 100vh;
 
-  background: #080612;
+  background:
+    radial-gradient(
+      circle at 12% 20%,
+      rgba(79, 70, 229, 0.12),
+      transparent 25%
+    ),
+    radial-gradient(
+      circle at 85% 25%,
+      rgba(219, 39, 119, 0.10),
+      transparent 25%
+    ),
+    #080612;
+
+  color: #f7f7fb;
+
+  overflow-x: hidden;
 }
 
 #root {
