@@ -29,6 +29,7 @@ function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
+  const [analysisHistory, setAnalysisHistory] = useState([]);
 
   const isImage = file?.type?.startsWith("image/");
   const isVideo = file?.type?.startsWith("video/");
@@ -73,6 +74,20 @@ function App() {
       const data = await response.json();
 
       setAnalysisResult(data);
+
+      setAnalysisHistory((previous) => [
+        {
+          id: Date.now(),
+          filename: data.filename,
+          type: "Image",
+          score: data.health.score,
+          severity: data.health.severity,
+          priority: data.health.priority,
+          damageCount: data.health.damage_count,
+          timestamp: new Date().toLocaleString(),
+        },
+        ...previous,
+      ]);
     } catch (err) {
       console.error(err);
 
@@ -112,6 +127,20 @@ function App() {
       const data = await response.json();
 
       setAnalysisResult(data);
+
+      setAnalysisHistory((previous) => [
+        {
+          id: Date.now(),
+          filename: data.filename,
+          type: "Video",
+          score: data.health.score,
+          severity: data.health.severity,
+          priority: data.health.priority,
+          damageCount: data.health.damage_count,
+          timestamp: new Date().toLocaleString(),
+        },
+        ...previous,
+      ]);
     } catch (err) {
       console.error(err);
 
@@ -1326,6 +1355,166 @@ function App() {
 
               </motion.div>
             )}
+
+            </section>
+
+
+        {/* =========================
+            ANALYSIS HISTORY
+        ========================= */}
+
+        <section className="history-section">
+
+          <div className="section-heading">
+
+            <div>
+
+              <span className="section-label">
+                03 / ANALYSIS HISTORY
+              </span>
+
+              <h3>
+                Recent Inspections
+              </h3>
+
+            </div>
+
+            {analysisHistory.length > 0 && (
+              <span className="supported">
+                {analysisHistory.length} inspection
+                {analysisHistory.length !== 1 ? "s" : ""}
+              </span>
+            )}
+
+          </div>
+
+
+          {analysisHistory.length === 0 ? (
+
+            <div className="empty-history">
+
+              <div className="empty-icon">
+                <Activity size={25} />
+              </div>
+
+              <div>
+                <h4>
+                  No inspections yet
+                </h4>
+
+                <p>
+                  Completed road inspections will
+                  appear here automatically.
+                </p>
+              </div>
+
+            </div>
+
+          ) : (
+
+            <div className="history-list">
+
+              {analysisHistory.map((inspection) => (
+
+                <motion.div
+                  className="history-item"
+                  key={inspection.id}
+                  initial={{
+                    opacity: 0,
+                    y: 10,
+                  }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                  }}
+                  transition={{
+                    duration: 0.3,
+                  }}
+                >
+
+                  <div className="history-type-icon">
+
+                    {inspection.type === "Image" ? (
+                      <ImageIcon size={19} />
+                    ) : (
+                      <Video size={19} />
+                    )}
+
+                  </div>
+
+
+                  <div className="history-main">
+
+                    <strong>
+                      {inspection.filename}
+                    </strong>
+
+                    <span>
+                      {inspection.type} ·{" "}
+                      {inspection.timestamp}
+                    </span>
+
+                  </div>
+
+
+                  <div
+                    className={`history-score ${getScoreClass(
+                      inspection.score
+                    )}`}
+                  >
+                    <strong>
+                      {inspection.score}
+                    </strong>
+
+                    <span>
+                      / 100
+                    </span>
+                  </div>
+
+
+                  <div
+                    className={`history-severity ${getSeverityClass(
+                      inspection.severity
+                    )}`}
+                  >
+                    <span />
+
+                    {inspection.severity}
+                  </div>
+
+
+                  <div className="history-stat">
+
+                    <span>
+                      Priority
+                    </span>
+
+                    <strong>
+                      {inspection.priority}
+                    </strong>
+
+                  </div>
+
+
+                  <div className="history-stat">
+
+                    <span>
+                      Defects
+                    </span>
+
+                    <strong>
+                      {inspection.damageCount}
+                    </strong>
+
+                  </div>
+
+                </motion.div>
+
+              ))}
+
+            </div>
+
+          )}
 
         </section>
 
