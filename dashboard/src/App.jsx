@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Activity,
@@ -29,7 +29,25 @@ function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
-  const [analysisHistory, setAnalysisHistory] = useState([]);
+
+  const [analysisHistory, setAnalysisHistory] = useState(() => {
+    try {
+      const savedHistory = localStorage.getItem(
+        "roadvision_analysis_history"
+      );
+
+      return savedHistory ? JSON.parse(savedHistory) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(
+      "roadvision_analysis_history",
+      JSON.stringify(analysisHistory)
+    );
+  }, [analysisHistory]);
 
   const isImage = file?.type?.startsWith("image/");
   const isVideo = file?.type?.startsWith("video/");
@@ -78,7 +96,7 @@ function App() {
       setAnalysisHistory((previous) => [
         {
           id: Date.now(),
-          filename: data.filename,
+          filename: data.filename || file.name,
           type: "Image",
           score: data.health.score,
           severity: data.health.severity,
@@ -87,7 +105,7 @@ function App() {
           timestamp: new Date().toLocaleString(),
         },
         ...previous,
-      ]);
+      ].slice(0, 10));
     } catch (err) {
       console.error(err);
 
@@ -131,7 +149,7 @@ function App() {
       setAnalysisHistory((previous) => [
         {
           id: Date.now(),
-          filename: data.filename,
+          filename: data.filename || file.name,
           type: "Video",
           score: data.health.score,
           severity: data.health.severity,
@@ -140,7 +158,7 @@ function App() {
           timestamp: new Date().toLocaleString(),
         },
         ...previous,
-      ]);
+      ].slice(0, 10));
     } catch (err) {
       console.error(err);
 
@@ -1356,7 +1374,7 @@ function App() {
               </motion.div>
             )}
 
-            </section>
+        </section>
 
 
         {/* =========================
