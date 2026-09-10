@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Camera,
   CheckCircle2,
+  ClipboardList,
   Download,
   FileText,
   Image as ImageIcon,
@@ -29,7 +30,7 @@ function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
-
+  const [showReport, setShowReport] = useState(false);
   const [analysisHistory, setAnalysisHistory] = useState(() => {
     try {
       const savedHistory = localStorage.getItem(
@@ -72,6 +73,7 @@ function App() {
     setIsAnalyzing(true);
     setError("");
     setAnalysisResult(null);
+    setShowReport(false);
 
     try {
       const formData = new FormData();
@@ -102,6 +104,7 @@ function App() {
           severity: data.health.severity,
           priority: data.health.priority,
           damageCount: data.health.damage_count,
+          damageBreakdown: data.health.damage_breakdown || {},
           timestamp: new Date().toLocaleString(),
         },
         ...previous,
@@ -125,6 +128,7 @@ function App() {
     setIsAnalyzing(true);
     setError("");
     setAnalysisResult(null);
+    setShowReport(false);
 
     try {
       const formData = new FormData();
@@ -155,6 +159,7 @@ function App() {
           severity: data.health.severity,
           priority: data.health.priority,
           damageCount: data.health.damage_count,
+          damageBreakdown: data.health.damage_breakdown || {},
           timestamp: new Date().toLocaleString(),
         },
         ...previous,
@@ -171,10 +176,11 @@ function App() {
   };
 
   const clearInspection = () => {
-    setFile(null);
-    setAnalysisResult(null);
-    setError("");
-  };
+  setFile(null);
+  setAnalysisResult(null);
+  setError("");
+  setShowReport(false);
+};
 
   /* =========================
      DOWNLOAD OUTPUT
@@ -288,6 +294,60 @@ function App() {
       }
     }
   };
+
+  /* =========================
+     INSPECTION ANALYTICS
+  ========================= */
+
+  const totalInspections = analysisHistory.length;
+
+  const averageHealthScore =
+    totalInspections > 0
+      ? Math.round(
+          analysisHistory.reduce(
+            (total, inspection) =>
+              total + Number(inspection.score || 0),
+            0
+          ) / totalInspections
+        )
+      : 0;
+
+  const severityCounts = {
+    Good: analysisHistory.filter(
+      (inspection) => inspection.severity === "Good"
+    ).length,
+
+    Moderate: analysisHistory.filter(
+      (inspection) => inspection.severity === "Moderate"
+    ).length,
+
+    Poor: analysisHistory.filter(
+      (inspection) => inspection.severity === "Poor"
+    ).length,
+
+    Critical: analysisHistory.filter(
+      (inspection) => inspection.severity === "Critical"
+    ).length,
+  };
+
+  const defectTotals = analysisHistory.reduce(
+    (totals, inspection) => {
+      Object.entries(
+        inspection.damageBreakdown || {}
+      ).forEach(([defect, count]) => {
+        totals[defect] =
+          (totals[defect] || 0) + Number(count || 0);
+      });
+
+      return totals;
+    },
+    {}
+  );
+
+  const mostDetectedDefect =
+    Object.entries(defectTotals).sort(
+      (a, b) => b[1] - a[1]
+    )[0]?.[0] || "No data";
 
   const getScoreClass = (score) => {
     if (score >= 80) {
@@ -1099,6 +1159,15 @@ function App() {
                             Share
                           </span>
                         </button>
+                        <button
+  className="media-action-button"
+  type="button"
+  onClick={() => setShowReport(true)}
+  title="View full inspection report"
+>
+  <ClipboardList size={15} />
+  <span>Report</span>
+</button>
 
 
                         {/* VERSION */}
@@ -1538,6 +1607,132 @@ function App() {
 
 
         {/* =========================
+            INSPECTION ANALYTICS
+        ========================= */}
+
+        <section className="analytics-section">
+
+          <div className="section-heading">
+
+            <div>
+
+              <span className="section-label">
+                04 / INSPECTION ANALYTICS
+              </span>
+
+              <h3>
+                Inspection Overview
+              </h3>
+
+            </div>
+
+            <span className="supported">
+              Based on recent inspections
+            </span>
+
+          </div>
+
+
+          <div className="analytics-grid">
+
+            <div className="analytics-card">
+
+              <span>
+                TOTAL INSPECTIONS
+              </span>
+
+              <strong>
+                {totalInspections}
+              </strong>
+
+              <small>
+                Recent inspections stored
+              </small>
+
+            </div>
+
+
+            <div className="analytics-card">
+
+              <span>
+                AVERAGE HEALTH
+              </span>
+
+              <strong>
+                {averageHealthScore}
+                <em>/100</em>
+              </strong>
+
+              <small>
+                Average road health score
+              </small>
+
+            </div>
+
+
+            <div className="analytics-card">
+
+              <span>
+                MOST DETECTED DEFECT
+              </span>
+
+              <strong className="analytics-defect">
+                {mostDetectedDefect}
+              </strong>
+
+              <small>
+                Across recent inspections
+              </small>
+
+            </div>
+
+
+            <div className="analytics-card severity-overview">
+
+              <span>
+                SEVERITY DISTRIBUTION
+              </span>
+
+              <div className="severity-summary">
+
+                <div>
+                  <strong>
+                    {severityCounts.Good}
+                  </strong>
+                  <small>Good</small>
+                </div>
+
+                <div>
+                  <strong>
+                    {severityCounts.Moderate}
+                  </strong>
+                  <small>Moderate</small>
+                </div>
+
+                <div>
+                  <strong>
+                    {severityCounts.Poor}
+                  </strong>
+                  <small>Poor</small>
+                </div>
+
+                <div>
+                  <strong>
+                    {severityCounts.Critical}
+                  </strong>
+                  <small>Critical</small>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* =========================
             CAPABILITIES
         ========================= */}
 
@@ -1651,6 +1846,365 @@ function App() {
           </div>
 
         </section>
+       
+      {/* =========================
+    REPORT VIEWER
+========================= */}
+
+{showReport &&
+  analysisResult?.report && (
+    <div
+      className="report-overlay"
+      onClick={() => setShowReport(false)}
+    >
+      <motion.div
+        className="report-viewer"
+        initial={{
+          opacity: 0,
+          y: 20,
+          scale: 0.98,
+        }}
+        animate={{
+          opacity: 1,
+          y: 0,
+          scale: 1,
+        }}
+        transition={{
+          duration: 0.25,
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+
+        {/* REPORT HEADER */}
+
+        <div className="report-header">
+
+          <div className="report-title">
+
+            <div className="report-icon">
+              <ClipboardList size={21} />
+            </div>
+
+            <div>
+              <span className="section-label">
+                ROADVISION AI
+              </span>
+
+              <h3>
+                Inspection Report
+              </h3>
+
+              <p>
+                {analysisResult.report.inspection.image}
+              </p>
+            </div>
+
+          </div>
+
+          <button
+            className="report-close"
+            type="button"
+            onClick={() => setShowReport(false)}
+            title="Close report"
+          >
+            <X size={19} />
+          </button>
+
+        </div>
+
+
+        {/* INSPECTION DETAILS */}
+
+        <div className="report-details-grid">
+
+          <div className="report-detail-card">
+
+            <span>
+              INSPECTION FILE
+            </span>
+
+            <strong>
+              {analysisResult.report.inspection.image}
+            </strong>
+
+          </div>
+
+          <div className="report-detail-card">
+
+            <span>
+              INSPECTION DATE
+            </span>
+
+            <strong>
+              {analysisResult.report.inspection.date}
+            </strong>
+
+          </div>
+
+          <div className="report-detail-card">
+
+            <span>
+              TOTAL DEFECTS
+            </span>
+
+            <strong>
+              {analysisResult.report.damage_summary.total_defects}
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        {/* ROAD CONDITION */}
+
+        <div className="report-section">
+
+          <div className="report-section-heading">
+
+            <div>
+              <span className="section-label">
+                ROAD CONDITION
+              </span>
+
+              <h4>
+                AI Health Assessment
+              </h4>
+            </div>
+
+            <ShieldCheck size={19} />
+
+          </div>
+
+
+          <div className="report-health-grid">
+
+            <div className="report-score-card">
+
+              <span>
+                HEALTH SCORE
+              </span>
+
+              <strong
+                className={getScoreClass(
+                  analysisResult.report.road_condition.health_score
+                )}
+              >
+                {analysisResult.report.road_condition.health_score}
+              </strong>
+
+              <small>
+                / 100
+              </small>
+
+            </div>
+
+
+            <div className="report-condition-card">
+
+              <span>
+                SEVERITY
+              </span>
+
+              <div
+                className={`history-severity ${getSeverityClass(
+                  analysisResult.report.road_condition.severity
+                )}`}
+              >
+                <span />
+                {analysisResult.report.road_condition.severity}
+              </div>
+
+            </div>
+
+
+            <div className="report-condition-card">
+
+              <span>
+                MAINTENANCE PRIORITY
+              </span>
+
+              <strong>
+                {analysisResult.report.road_condition.maintenance_priority}
+              </strong>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* DAMAGE SUMMARY */}
+
+        <div className="report-section">
+
+          <div className="report-section-heading">
+
+            <div>
+              <span className="section-label">
+                DAMAGE SUMMARY
+              </span>
+
+              <h4>
+                Detected Defects
+              </h4>
+            </div>
+
+            <AlertTriangle size={19} />
+
+          </div>
+
+
+          <div className="report-breakdown">
+
+            {Object.entries(
+              analysisResult.report.damage_summary.breakdown || {}
+            ).length === 0 ? (
+
+              <div className="report-empty">
+                No defects detected.
+              </div>
+
+            ) : (
+
+              Object.entries(
+                analysisResult.report.damage_summary.breakdown || {}
+              ).map(([defect, count]) => (
+
+                <div
+                  className="report-defect-row"
+                  key={defect}
+                >
+
+                  <div className="report-defect-name">
+                    <span />
+                    <strong>
+                      {defect}
+                    </strong>
+                  </div>
+
+                  <strong>
+                    {count}
+                  </strong>
+
+                </div>
+
+              ))
+
+            )}
+
+          </div>
+
+        </div>
+
+
+        {/* DETECTION DETAILS */}
+
+        <div className="report-section">
+
+          <div className="report-section-heading">
+
+            <div>
+              <span className="section-label">
+                DETECTION DETAILS
+              </span>
+
+              <h4>
+                AI Detection Results
+              </h4>
+            </div>
+
+            <ScanLine size={19} />
+
+          </div>
+
+
+          {analysisResult.report.detections?.length > 0 ? (
+
+            <div className="report-detections">
+
+              {analysisResult.report.detections.map(
+                (detection, index) => (
+
+                  <div
+                    className="report-detection-row"
+                    key={`${detection.class}-${index}`}
+                  >
+
+                    <div>
+                      <strong>
+                        {detection.class}
+                      </strong>
+
+                      <span>
+                        Detection {index + 1}
+                      </span>
+                    </div>
+
+                    <strong>
+                      {(
+                        Number(detection.confidence) * 100
+                      ).toFixed(1)}
+                      %
+                    </strong>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
+          ) : (
+
+            <div className="report-empty">
+              No individual detections recorded.
+            </div>
+
+          )}
+
+        </div>
+
+
+        {/* RECOMMENDATION */}
+
+        <div className="report-recommendation">
+
+          <div className="report-recommendation-icon">
+            <ArrowUpRight size={19} />
+          </div>
+
+          <div>
+
+            <span>
+              AI RECOMMENDATION
+            </span>
+
+            <p>
+              {analysisResult.report.recommendation}
+            </p>
+
+          </div>
+
+        </div>
+
+
+        {/* FOOTER */}
+
+        <div className="report-footer">
+
+          <FileText size={15} />
+
+          <span>
+            Generated automatically by RoadVision AI
+          </span>
+
+        </div>
+
+      </motion.div>
+    </div>
+  )}
 
       </main>
 

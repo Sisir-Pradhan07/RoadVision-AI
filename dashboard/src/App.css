@@ -3095,3 +3095,665 @@ button {
   margin-top: 56px;
   margin-bottom: 56px;
 }
+
+/* =========================================================
+   INSPECTION ANALYTICS
+   ========================================================= */
+
+.analytics-section {
+  margin-bottom: 56px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analytics-card {
+  min-height: 118px;
+  padding: 20px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.018)
+    );
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.analytics-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 138, 61, 0.14);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.055),
+      rgba(255, 255, 255, 0.022)
+    );
+}
+
+.analytics-card > span {
+  display: block;
+  margin-bottom: 12px;
+  color: #777984;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.analytics-card > strong {
+  display: block;
+  color: #f1f1f6;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.analytics-card > small {
+  display: block;
+  margin-top: 10px;
+  color: #686b76;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.analytics-card > strong em {
+  margin-left: 4px;
+  color: #737580;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.analytics-defect {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ff9a5c !important;
+  font-size: 21px !important;
+  letter-spacing: -0.02em !important;
+}
+
+
+/* =========================
+   SEVERITY OVERVIEW
+   ========================= */
+
+.severity-overview {
+  grid-column: span 3;
+  min-height: auto;
+}
+
+.severity-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.severity-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.severity-summary strong {
+  color: #e8e8ed;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.severity-summary small {
+  color: #858792;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+
+/* =========================
+   RESPONSIVE
+   ========================= */
+
+@media (max-width: 900px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .severity-overview {
+    grid-column: span 1;
+  }
+
+  .severity-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .analytics-card {
+    min-height: 100px;
+    padding: 17px;
+  }
+
+  .analytics-card > strong {
+    font-size: 24px;
+  }
+
+  .analytics-defect {
+    font-size: 18px !important;
+  }
+
+  .severity-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   REPORT VIEWER
+   ========================================================= */
+
+.report-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  background: rgba(3, 2, 8, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  overflow-y: auto;
+}
+
+.report-viewer {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 18px;
+  background:
+    radial-gradient(
+      circle at 90% 0%,
+      rgba(124, 58, 237, 0.12),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 10% 100%,
+      rgba(236, 72, 153, 0.07),
+      transparent 28%
+    ),
+    rgba(12, 10, 22, 0.97);
+  box-shadow:
+    0 30px 100px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+/* Scrollbar */
+
+.report-viewer::-webkit-scrollbar {
+  width: 7px;
+}
+
+.report-viewer::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.report-viewer::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Header */
+
+.report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.report-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.report-icon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: 12px;
+  color: #c2a7ff;
+  background: rgba(124, 58, 237, 0.10);
+  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.08);
+}
+
+.report-title h3 {
+  margin: 4px 0 4px;
+  color: #f4f3f8;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.report-title p {
+  max-width: 520px;
+  margin: 0;
+  overflow: hidden;
+  color: #777984;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-close {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  color: #999ba5;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.report-close:hover {
+  color: #ffffff;
+  border-color: rgba(255, 138, 61, 0.2);
+  background: rgba(255, 138, 61, 0.08);
+}
+
+/* Inspection details */
+
+.report-details-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1.2fr 0.8fr;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.report-detail-card {
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.report-detail-card span,
+.report-condition-card span,
+.report-score-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: #686b76;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.report-detail-card strong {
+  display: block;
+  overflow: hidden;
+  color: #dcdce3;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sections */
+
+.report-section {
+  margin-top: 28px;
+}
+
+.report-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 14px;
+  color: #8e909a;
+}
+
+.report-section-heading h4 {
+  margin: 4px 0 0;
+  color: #eeeeF3;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+/* Health */
+
+.report-health-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.report-score-card,
+.report-condition-card {
+  min-height: 100px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.report-score-card strong {
+  display: inline-block;
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: -0.05em;
+}
+
+.report-score-card > small {
+  margin-left: 5px;
+  color: #696b76;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.report-score-card strong.score-good {
+  color: #63d6a0;
+}
+
+.report-score-card strong.score-moderate {
+  color: #f3c75f;
+}
+
+.report-score-card strong.score-poor {
+  color: #ff9a5c;
+}
+
+.report-score-card strong.score-critical {
+  color: #ff6f79;
+}
+
+.report-condition-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.report-condition-card > strong {
+  color: #e4e4e9;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* Damage breakdown */
+
+.report-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-defect-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 15px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.report-defect-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.report-defect-name span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff9a5c;
+  box-shadow: 0 0 10px rgba(255, 154, 92, 0.35);
+}
+
+.report-defect-row strong {
+  color: #d8d8df;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.report-defect-row > strong {
+  min-width: 24px;
+  text-align: right;
+  color: #f0f0f4;
+  font-size: 14px;
+}
+
+.report-empty {
+  padding: 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  color: #737580;
+  font-size: 10px;
+  text-align: center;
+}
+
+/* Detection list */
+
+.report-detections {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 270px;
+  overflow-y: auto;
+}
+
+.report-detection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.report-detection-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.report-detection-row strong {
+  color: #dcdce3;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.report-detection-row span {
+  color: #646771;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.report-detection-row > strong {
+  color: #b89cff;
+  font-size: 11px;
+}
+
+/* Recommendation */
+
+.report-recommendation {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-top: 28px;
+  padding: 17px;
+  border: 1px solid rgba(255, 138, 61, 0.11);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 138, 61, 0.055),
+      rgba(124, 58, 237, 0.045)
+    );
+}
+
+.report-recommendation-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 138, 61, 0.15);
+  border-radius: 9px;
+  color: #ffab73;
+  background: rgba(255, 138, 61, 0.07);
+}
+
+.report-recommendation span {
+  display: block;
+  margin-bottom: 6px;
+  color: #777984;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+
+.report-recommendation p {
+  margin: 0;
+  color: #d7d7de;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* Footer */
+
+.report-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  color: #555762;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+/* Responsive */
+
+@media (max-width: 800px) {
+  .report-overlay {
+    padding: 18px;
+  }
+
+  .report-viewer {
+    max-height: calc(100vh - 36px);
+    padding: 21px;
+  }
+
+  .report-details-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-detail-card:first-child {
+    grid-column: span 2;
+  }
+
+  .report-health-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-score-card {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 560px) {
+  .report-overlay {
+    padding: 8px;
+  }
+
+  .report-viewer {
+    max-height: calc(100vh - 16px);
+    padding: 17px;
+    border-radius: 14px;
+  }
+
+  .report-header {
+    gap: 10px;
+  }
+
+  .report-title {
+    gap: 10px;
+  }
+
+  .report-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .report-title h3 {
+    font-size: 17px;
+  }
+
+  .report-details-grid,
+  .report-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-detail-card:first-child,
+  .report-score-card {
+    grid-column: span 1;
+  }
+
+  .report-score-card {
+    min-height: 85px;
+  }
+
+  .report-score-card strong {
+    font-size: 31px;
+  }
+}

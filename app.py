@@ -5,6 +5,8 @@ import uuid
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from reports.report_generator import generate_report
 from src.detection.predict import predict_image
 from src.detection.video_predict import analyze_video
 
@@ -15,6 +17,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -23,11 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+
 OUTPUTS_DIR = Path("outputs")
 OUTPUTS_DIR.mkdir(exist_ok=True)
+
 
 app.mount(
     "/outputs",
@@ -47,34 +53,62 @@ def health_check():
 @app.post("/api/analyze/image")
 async def analyze_image(file: UploadFile = File(...)):
     file_id = uuid.uuid4().hex
+
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
 
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    result, detections, health = predict_image(str(file_path))
+    result, detections, health = predict_image(
+        str(file_path)
+    )
 
     output_image = Path(result.save_dir) / file_path.name
 
+    report = generate_report(
+        detections=detections,
+        health=health,
+        image_name=file.filename,
+    )
+
     return {
-    "filename": file.filename,
-    "output_image": f"/outputs/predictions/{output_image.name}",
-    "detections": detections,
-    "health": health,
-}
+        "filename": file.filename,
+        "output_image": f"/outputs/predictions/{output_image.name}",
+        "detections": detections,
+        "health": health,
+        "report": report,
+    }
+
 
 @app.post("/api/analyze/video")
-async def analyze_video_endpoint(file: UploadFile = File(...)):
+async def analyze_video_endpoint(
+    file: UploadFile = File(...)
+):
     file_id = uuid.uuid4().hex
+
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
 
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    result = analyze_video(str(file_path))
+    result = analyze_video(
+        str(file_path)
+    )
 
-    output_video = Path(result["output_video"])
+    output_video = Path(
+        result["output_video"]
+    )
 
-    result["output_video"] = f"/outputs/videos/{output_video.name}"
+    result["output_video"] = (
+        f"/outputs/videos/{output_video.name}"
+    )
+
+    report = generate_report(
+        detections=result.get("detections", []),
+        health=result["health"],
+        image_name=file.filename,
+    )
+
+    result["report"] = report
 
     return result
