@@ -3581,16 +3581,13 @@ button {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-height: 270px;
-  overflow-y: auto;
 }
 
 .report-detection-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 11px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 13px 14px;
   border: 1px solid rgba(255, 255, 255, 0.045);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.018);
@@ -3599,7 +3596,8 @@ button {
 .report-detection-row > div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .report-detection-row strong {
@@ -3615,8 +3613,10 @@ button {
 }
 
 .report-detection-row > strong {
+  align-self: center;
   color: #b89cff;
   font-size: 11px;
+  font-weight: 800;
 }
 
 /* Recommendation */
@@ -3756,4 +3756,57 @@ button {
   .report-score-card strong {
     font-size: 31px;
   }
+}
+
+/* Detection confidence */
+
+.confidence-bar {
+  width: 100%;
+  height: 3px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.confidence-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(124, 58, 237, 0.7),
+    rgba(180, 145, 255, 0.95)
+  );
+  transition: width 0.35s ease;
+}
+
+/* Defect severity indicators */
+
+.report-defect-row.defect-high {
+  border-color: rgba(255, 111, 121, 0.16);
+  background: rgba(255, 111, 121, 0.035);
+}
+
+.report-defect-row.defect-high .report-defect-name span {
+  background: #ff6f79;
+  box-shadow: 0 0 10px rgba(255, 111, 121, 0.4);
+}
+
+.report-defect-row.defect-high .report-defect-name strong {
+  color: #ffb0b5;
+}
+
+.report-defect-row.defect-medium {
+  border-color: rgba(255, 154, 92, 0.12);
+  background: rgba(255, 154, 92, 0.025);
+}
+
+.report-defect-row.defect-medium .report-defect-name span {
+  background: #ff9a5c;
+  box-shadow: 0 0 9px rgba(255, 154, 92, 0.35);
+}
+
+.report-defect-row.defect-normal .report-defect-name span {
+  background: #b89cff;
+  box-shadow: 0 0 8px rgba(184, 156, 255, 0.3);
 }

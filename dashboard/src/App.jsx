@@ -2069,28 +2069,31 @@ function App() {
             ) : (
 
               Object.entries(
-                analysisResult.report.damage_summary.breakdown || {}
-              ).map(([defect, count]) => (
+  analysisResult.report.damage_summary.breakdown || {}
+).map(([defect, count]) => {
+  const normalizedDefect = defect.toLowerCase();
 
-                <div
-                  className="report-defect-row"
-                  key={defect}
-                >
+  const severityClass =
+    normalizedDefect === "pothole"
+      ? "defect-high"
+      : normalizedDefect === "alligator crack"
+        ? "defect-medium"
+        : "defect-normal";
 
-                  <div className="report-defect-name">
-                    <span />
-                    <strong>
-                      {defect}
-                    </strong>
-                  </div>
+  return (
+    <div
+      className={`report-defect-row ${severityClass}`}
+      key={defect}
+    >
+      <div className="report-defect-name">
+        <span />
+        <strong>{defect}</strong>
+      </div>
 
-                  <strong>
-                    {count}
-                  </strong>
-
-                </div>
-
-              ))
+      <strong>{count}</strong>
+    </div>
+  );
+})
 
             )}
 
@@ -2125,35 +2128,41 @@ function App() {
             <div className="report-detections">
 
               {analysisResult.report.detections.map(
-                (detection, index) => (
+  (detection, index) => {
+    const confidence =
+      Number(detection.confidence) * 100;
 
-                  <div
-                    className="report-detection-row"
-                    key={`${detection.class}-${index}`}
-                  >
+    return (
+      <div
+        className="report-detection-row"
+        key={`${detection.class}-${index}`}
+      >
+        <div>
+          <strong>
+            {detection.class}
+          </strong>
 
-                    <div>
-                      <strong>
-                        {detection.class}
-                      </strong>
+          <span>
+            Detection {index + 1}
+          </span>
 
-                      <span>
-                        Detection {index + 1}
-                      </span>
-                    </div>
+          <div className="confidence-bar">
+            <div
+              className="confidence-bar-fill"
+              style={{
+                width: `${confidence}%`,
+              }}
+            />
+          </div>
+        </div>
 
-                    <strong>
-                      {(
-                        Number(detection.confidence) * 100
-                      ).toFixed(1)}
-                      %
-                    </strong>
-
-                  </div>
-
-                )
-              )}
-
+        <strong>
+          {confidence.toFixed(1)}%
+        </strong>
+      </div>
+    );
+  }
+)}
             </div>
 
           ) : (
