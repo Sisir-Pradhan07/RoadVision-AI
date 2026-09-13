@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Activity,
@@ -17,20 +17,124 @@ import {
   Upload,
   Video,
   X,
+  MapPinned,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMap,
+} from "react-leaflet";
+
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 import "./App.css";
 
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const createInspectionMarkerIcon = (severity) => {
+  const normalizedSeverity =
+    severity?.toLowerCase() || "moderate";
+
+  return L.divIcon({
+    className: "roadvision-map-marker",
+    html: `
+      <div class="roadvision-marker-pin marker-${normalizedSeverity}">
+        <span></span>
+      </div>
+    `,
+    iconSize: [22, 22],
+    iconAnchor: [11, 22],
+    popupAnchor: [0, -22],
+  });
+};
+function MapBoundsController({
+  inspections,
+  selectedInspectionId,
+  markerRefs,
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const validInspections = inspections.filter(
+      (inspection) =>
+        inspection.latitude != null &&
+        inspection.longitude != null
+    );
+
+    if (!validInspections.length) {
+      return;
+    }
+
+    if (selectedInspectionId) {
+      const selectedInspection = validInspections.find(
+        (inspection) =>
+          inspection.id === selectedInspectionId
+      );
+
+      if (selectedInspection) {
+        const position = [
+          Number(selectedInspection.latitude),
+          Number(selectedInspection.longitude),
+        ];
+
+        map.setView(position, 15, {
+          animate: true,
+        });
+
+        setTimeout(() => {
+          markerRefs.current[selectedInspection.id]?.openPopup();
+        }, 350);
+
+        return;
+      }
+    }
+
+    const bounds = validInspections.map((inspection) => [
+      Number(inspection.latitude),
+      Number(inspection.longitude),
+    ]);
+
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 13);
+    } else {
+      map.fitBounds(bounds, {
+        padding: [50, 50],
+        maxZoom: 14,
+      });
+    }
+  }, [
+    inspections,
+    selectedInspectionId,
+    markerRefs,
+    map,
+  ]);
+
+  return null;
+}
+
 function App() {
+  const [selectedInspectionId, setSelectedInspectionId] =
+  useState(null);
+
+const markerRefs = useRef({});
   const [file, setFile] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
   const [showReport, setShowReport] = useState(false);
+  const [roadName, setRoadName] = useState("");
+  const [locationName, setLocationName] = useState("");
+  const [mapPosition, setMapPosition] = useState([
+    20.2961,
+    85.8245,
+  ]);
+  const [isGeocoding, setIsGeocoding] = useState(false);
   const [analysisHistory, setAnalysisHistory] = useState(() => {
     try {
       const savedHistory = localStorage.getItem(
@@ -50,8 +154,137 @@ function App() {
     );
   }, [analysisHistory]);
 
+  useEffect(() => {
+  const repairExistingHistory = async () => {
+    const repairKey = "roadvision_location_repair_v1";
+
+    if (localStorage.getItem(repairKey)) {
+      return;
+    }
+
+    if (!analysisHistory.length) {
+      return;
+    }
+
+    let changed = false;
+    const repairedHistory = [];
+
+    for (const inspection of analysisHistory) {
+      const query = [
+        inspection.roadName,
+        inspection.locationName,
+      ]
+        .filter(Boolean)
+        .join(", ")
+        .trim();
+
+      if (!query) {
+        repairedHistory.push(inspection);
+        continue;
+      }
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=in&q=${encodeURIComponent(query)}`
+        );
+
+        if (!response.ok) {
+          repairedHistory.push(inspection);
+          continue;
+        }
+
+        const results = await response.json();
+
+        if (results.length > 0) {
+          const latitude = Number(results[0].lat);
+          const longitude = Number(results[0].lon);
+
+          repairedHistory.push({
+            ...inspection,
+            latitude,
+            longitude,
+          });
+
+          if (
+            inspection.latitude !== latitude ||
+            inspection.longitude !== longitude
+          ) {
+            changed = true;
+          }
+        } else {
+          repairedHistory.push(inspection);
+        }
+      } catch {
+        repairedHistory.push(inspection);
+      }
+
+      // Avoid sending requests too quickly to Nominatim.
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1100)
+      );
+    }
+
+    if (changed) {
+      setAnalysisHistory(repairedHistory);
+    }
+
+    localStorage.setItem(repairKey, "true");
+  };
+
+    repairExistingHistory();
+  // Run this migration only once for existing history.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
   const isImage = file?.type?.startsWith("image/");
   const isVideo = file?.type?.startsWith("video/");
+
+  const geocodeInspectionLocation = async () => {
+    const query = [roadName, locationName]
+      .filter(Boolean)
+      .join(", ")
+      .trim();
+
+    if (!query) {
+      return;
+    }
+
+    
+
+    setIsGeocoding(true);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=in&q=${encodeURIComponent(query)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Geocoding request failed.");
+      }
+
+      const results = await response.json();
+
+      if (results.length > 0) {
+  const coordinates = [
+    Number(results[0].lat),
+    Number(results[0].lon),
+  ];
+
+  setMapPosition(coordinates);
+
+  return coordinates;
+}
+
+return null;
+    } catch (error) {
+      console.error(
+        "Location lookup failed:",
+        error
+      );
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files?.[0];
@@ -76,9 +309,12 @@ function App() {
     setShowReport(false);
 
     try {
+      const coordinates = await geocodeInspectionLocation();
       const formData = new FormData();
-      formData.append("file", file);
 
+formData.append("file", file);
+formData.append("road_name", roadName);
+formData.append("location_name", locationName);
       const response = await fetch(
         `${API_BASE_URL}/api/analyze/image`,
         {
@@ -100,7 +336,15 @@ function App() {
           id: Date.now(),
           filename: data.filename || file.name,
           type: "Image",
-          score: data.health.score,
+          roadName,
+locationName,
+latitude: coordinates
+  ? coordinates[0]
+  : null,
+longitude: coordinates
+  ? coordinates[1]
+  : null,
+score: data.health.score,
           severity: data.health.severity,
           priority: data.health.priority,
           damageCount: data.health.damage_count,
@@ -131,8 +375,12 @@ function App() {
     setShowReport(false);
 
     try {
+      const coordinates = await geocodeInspectionLocation();
       const formData = new FormData();
-      formData.append("file", file);
+
+formData.append("file", file);
+formData.append("road_name", roadName);
+formData.append("location_name", locationName);
 
       const response = await fetch(
         `${API_BASE_URL}/api/analyze/video`,
@@ -155,7 +403,15 @@ function App() {
           id: Date.now(),
           filename: data.filename || file.name,
           type: "Video",
-          score: data.health.score,
+          roadName,
+locationName,
+latitude: coordinates
+  ? coordinates[0]
+  : null,
+longitude: coordinates
+  ? coordinates[1]
+  : null,
+score: data.health.score,
           severity: data.health.severity,
           priority: data.health.priority,
           damageCount: data.health.damage_count,
@@ -916,7 +1172,75 @@ function App() {
           )}
 
         </section>
+        {/* =========================
+            INSPECTION LOCATION
+        ========================= */}
 
+        <section className="location-section">
+
+          <div className="section-heading">
+
+            <div>
+
+              <span className="section-label">
+                LOCATION
+              </span>
+
+              <h3>
+                Inspection Location
+              </h3>
+
+              <p>
+                Add the road and area where this inspection was performed.
+              </p>
+
+            </div>
+
+            <MapPinned size={20} />
+
+          </div>
+
+
+          <div className="location-card">
+
+            <div className="location-field">
+
+              <label>
+                ROAD / ROUTE
+              </label>
+
+              <input
+                type="text"
+                value={roadName}
+                onChange={(event) =>
+                  setRoadName(event.target.value)
+                }
+                placeholder="e.g. NH Road, Village Road"
+              />
+
+            </div>
+
+
+            <div className="location-field">
+
+              <label>
+                AREA / VILLAGE
+              </label>
+
+              <input
+                type="text"
+                value={locationName}
+                onChange={(event) =>
+                  setLocationName(event.target.value)
+                }
+                placeholder="e.g. Example Village, Odisha"
+              />
+
+            </div>
+
+          </div>
+
+        </section>
 
         {/* =========================
             SYSTEM MODULES
@@ -1445,6 +1769,124 @@ function App() {
 
         </section>
 
+        {/* =========================
+    INSPECTION MAP
+========================= */}
+
+<section className="map-section">
+
+  <div className="section-heading">
+
+    <div>
+
+      <span className="section-label">
+        03 / INSPECTION MAP
+      </span>
+
+      <h3>
+        Road Inspection Location
+      </h3>
+
+      <p>
+        Geographic view of the selected inspection area.
+      </p>
+
+    </div>
+
+    <MapPin size={20} />
+
+  </div>
+
+
+  <div className="map-card">
+
+    <MapContainer
+      key={`${mapPosition[0]}-${mapPosition[1]}`}
+      center={mapPosition}
+      zoom={12}
+      scrollWheelZoom={false}
+      className="roadvision-map"
+    >
+     <MapBoundsController
+  inspections={analysisHistory}
+  selectedInspectionId={selectedInspectionId}
+  markerRefs={markerRefs}
+/>
+
+      <TileLayer
+        attribution='&copy; OpenStreetMap contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+
+      {analysisHistory
+  .filter(
+    (inspection) =>
+      inspection.latitude != null &&
+      inspection.longitude != null
+  )
+  .map((inspection) => (
+    <Marker
+  key={inspection.id}
+  ref={(marker) => {
+    if (marker) {
+      markerRefs.current[inspection.id] = marker;
+    }
+  }}
+  position={[
+    Number(inspection.latitude),
+    Number(inspection.longitude),
+  ]}
+  icon={createInspectionMarkerIcon(
+  inspection.severity
+)}
+>
+      <Popup>
+        <strong>RoadVision AI Inspection</strong>
+        <br />
+        {inspection.roadName || "Road not specified"}
+        <br />
+        {inspection.locationName || "Location not specified"}
+        <br />
+        <strong>
+          Health: {inspection.score}/100
+        </strong>
+        <br />
+        {inspection.severity} · {inspection.priority}
+        <br />
+        {inspection.damageCount} defect
+        {inspection.damageCount === 1 ? "" : "s"}
+      </Popup>
+    </Marker>
+  ))}
+
+    </MapContainer>
+
+
+    <div className="map-overlay-info">
+
+      <div className="map-status-dot" />
+
+      <div>
+
+        <strong>
+          {isGeocoding
+            ? "Locating inspection..."
+            : "Inspection Point"}
+        </strong>
+
+        <span>
+          {roadName || "Road not specified"}
+          {" · "}
+          {locationName || "Location not specified"}
+        </span>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
 
         {/* =========================
             ANALYSIS HISTORY
@@ -1504,12 +1946,24 @@ function App() {
               {analysisHistory.map((inspection) => (
 
                 <motion.div
-                  className="history-item"
-                  key={inspection.id}
-                  initial={{
-                    opacity: 0,
-                    y: 10,
-                  }}
+  className={`history-item ${
+  selectedInspectionId === inspection.id
+    ? "selected"
+    : ""
+}`}
+  key={inspection.id}
+  onClick={() => {
+    if (
+      inspection.latitude != null &&
+      inspection.longitude != null
+    ) {
+      setSelectedInspectionId(inspection.id);
+    }
+  }}
+  initial={{
+    opacity: 0,
+    y: 10,
+  }}
                   animate={{
                     opacity: 1,
                     y: 0,
@@ -1540,6 +1994,22 @@ function App() {
                       {inspection.type} ·{" "}
                       {inspection.timestamp}
                     </span>
+                    <span className="history-location">
+  <MapPin size={10} />
+
+  {inspection.roadName || "Road not specified"}
+
+  {inspection.locationName
+    ? ` · ${inspection.locationName}`
+    : ""}
+
+  {inspection.latitude &&
+    inspection.longitude
+    ? ` · ${Number(inspection.latitude).toFixed(4)}, ${Number(
+        inspection.longitude
+      ).toFixed(4)}`
+    : ""}
+</span>
 
                   </div>
 
@@ -1940,6 +2410,31 @@ function App() {
             </strong>
 
           </div>
+          <div className="report-detail-card">
+
+  <span>
+    ROAD / ROUTE
+  </span>
+
+  <strong>
+    {analysisResult.report.inspection.road_name ||
+      "Not specified"}
+  </strong>
+
+</div>
+
+<div className="report-detail-card">
+
+  <span>
+    AREA / VILLAGE
+  </span>
+
+  <strong>
+    {analysisResult.report.inspection.location_name ||
+      "Not specified"}
+  </strong>
+
+</div>
 
           <div className="report-detail-card">
 
