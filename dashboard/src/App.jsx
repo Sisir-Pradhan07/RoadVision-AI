@@ -1955,10 +1955,12 @@ score: data.health.score,
       <div>
 
         <strong>
-          {isGeocoding
-            ? "Locating inspection..."
-            : "Inspection Point"}
-        </strong>
+  {isGeocoding
+    ? "Locating inspection..."
+    : filteredMapInspections.length === 1
+      ? "Inspection Point"
+      : "Inspection Points"}
+</strong>
 
         <span>
           {roadName || "Road not specified"}
