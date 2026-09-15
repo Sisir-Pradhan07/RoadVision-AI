@@ -1202,8 +1202,8 @@ score: data.health.score,
             <div>
 
               <span className="section-label">
-                LOCATION
-              </span>
+  01 / NEW INSPECTION · LOCATION
+</span>
 
               <h3>
                 Inspection Location
