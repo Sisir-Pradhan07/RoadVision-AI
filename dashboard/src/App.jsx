@@ -1965,6 +1965,10 @@ score: data.health.score,
           {" · "}
           {locationName || "Location not specified"}
         </span>
+        <span className="map-inspection-count">
+  {filteredMapInspections.length} inspection
+  {filteredMapInspections.length !== 1 ? "s" : ""} shown
+</span>
 
       </div>
 
