@@ -4067,6 +4067,36 @@ button {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.map-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 600;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(10, 12, 18, 0.9);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  pointer-events: none;
+}
+
+.map-empty-state strong {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.map-empty-state span {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+}
+
 .legend-dot {
   width: 7px;
   height: 7px;

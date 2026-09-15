@@ -1877,7 +1877,16 @@ score: data.health.score,
         attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-
+{filteredMapInspections.length === 0 && (
+  <div className="map-empty-state">
+    <strong>
+      No {mapSeverityFilter} inspections found
+    </strong>
+    <span>
+      Try another severity filter.
+    </span>
+  </div>
+)}
       {filteredMapInspections.map((inspection) => (
     <Marker
   key={inspection.id}
