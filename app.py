@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 import uuid
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -51,7 +51,11 @@ def health_check():
 
 
 @app.post("/api/analyze/image")
-async def analyze_image(file: UploadFile = File(...)):
+async def analyze_image(
+    file: UploadFile = File(...),
+    road_name: str = Form(""),
+    location_name: str = Form(""),
+):
     file_id = uuid.uuid4().hex
 
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
@@ -66,10 +70,13 @@ async def analyze_image(file: UploadFile = File(...)):
     output_image = Path(result.save_dir) / file_path.name
 
     report = generate_report(
-        detections=detections,
-        health=health,
-        image_name=file.filename,
-    )
+    detections=detections,
+    health=health,
+    image_name=file.filename,
+)
+
+    report["inspection"]["road_name"] = road_name
+    report["inspection"]["location_name"] = location_name
 
     return {
         "filename": file.filename,
@@ -82,7 +89,9 @@ async def analyze_image(file: UploadFile = File(...)):
 
 @app.post("/api/analyze/video")
 async def analyze_video_endpoint(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    road_name: str = Form(""),
+    location_name: str = Form(""),
 ):
     file_id = uuid.uuid4().hex
 
@@ -108,6 +117,8 @@ async def analyze_video_endpoint(
         health=result["health"],
         image_name=file.filename,
     )
+    report["inspection"]["road_name"] = road_name
+    report["inspection"]["location_name"] = location_name
 
     result["report"] = report
 

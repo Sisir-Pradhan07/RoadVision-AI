@@ -18,6 +18,7 @@ import {
   Video,
   X,
   MapPinned,
+  RotateCcw,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -121,8 +122,11 @@ function MapBoundsController({
 function App() {
   const [selectedInspectionId, setSelectedInspectionId] =
   useState(null);
-
-const markerRefs = useRef({});
+  const [mapSeverityFilter, setMapSeverityFilter] =
+  useState("All");
+  const [isResettingMap, setIsResettingMap] =
+  useState(false);
+  const markerRefs = useRef({});
   const [file, setFile] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -235,6 +239,21 @@ const markerRefs = useRef({});
   // Run this migration only once for existing history.
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+  const filteredMapInspections =
+    analysisHistory.filter((inspection) => {
+      if (
+        inspection.latitude == null ||
+        inspection.longitude == null
+      ) {
+        return false;
+      }
+
+      return (
+        mapSeverityFilter === "All" ||
+        inspection.severity === mapSeverityFilter
+      );
+    });
+
 
   const isImage = file?.type?.startsWith("image/");
   const isVideo = file?.type?.startsWith("video/");
@@ -1800,15 +1819,56 @@ score: data.health.score,
 
   <div className="map-card">
 
-    <MapContainer
-      key={`${mapPosition[0]}-${mapPosition[1]}`}
+  <div className="map-filter">
+    <span>Severity:</span>
+
+    <select
+      value={mapSeverityFilter}
+      onChange={(event) =>
+        setMapSeverityFilter(event.target.value)
+      }
+    >
+      <option value="All">All</option>
+      <option value="Good">Good</option>
+      <option value="Moderate">Moderate</option>
+      <option value="Poor">Poor</option>
+      <option value="Critical">Critical</option>
+    </select>
+    <button
+  type="button"
+  className="map-reset-button"
+  onClick={() => {
+    setIsResettingMap(true);
+    setSelectedInspectionId(null);
+    setMapSeverityFilter("All");
+
+    setTimeout(() => {
+      setIsResettingMap(false);
+    }, 600);
+  }}
+  title="Reset map view"
+>
+  <RotateCcw
+    size={14}
+    className={
+      isResettingMap
+        ? "reset-icon-spinning"
+        : ""
+    }
+  />
+  Reset
+</button>
+  </div>
+
+  <MapContainer
+    key={`${mapPosition[0]}-${mapPosition[1]}`}
       center={mapPosition}
       zoom={12}
       scrollWheelZoom={false}
       className="roadvision-map"
     >
      <MapBoundsController
-  inspections={analysisHistory}
+  inspections={filteredMapInspections}
   selectedInspectionId={selectedInspectionId}
   markerRefs={markerRefs}
 />
@@ -1818,13 +1878,7 @@ score: data.health.score,
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {analysisHistory
-  .filter(
-    (inspection) =>
-      inspection.latitude != null &&
-      inspection.longitude != null
-  )
-  .map((inspection) => (
+      {filteredMapInspections.map((inspection) => (
     <Marker
   key={inspection.id}
   ref={(marker) => {
@@ -1861,6 +1915,29 @@ score: data.health.score,
 
     </MapContainer>
 
+<div className="map-legend">
+  <span>SEVERITY</span>
+
+  <div>
+    <i className="legend-dot good" />
+    Good
+  </div>
+
+  <div>
+    <i className="legend-dot moderate" />
+    Moderate
+  </div>
+
+  <div>
+    <i className="legend-dot poor" />
+    Poor
+  </div>
+
+  <div>
+    <i className="legend-dot critical" />
+    Critical
+  </div>
+</div>
 
     <div className="map-overlay-info">
 
@@ -1899,7 +1976,7 @@ score: data.health.score,
             <div>
 
               <span className="section-label">
-                03 / ANALYSIS HISTORY
+                04 / ANALYSIS HISTORY
               </span>
 
               <h3>
@@ -2003,12 +2080,12 @@ score: data.health.score,
     ? ` · ${inspection.locationName}`
     : ""}
 
-  {inspection.latitude &&
-    inspection.longitude
-    ? ` · ${Number(inspection.latitude).toFixed(4)}, ${Number(
-        inspection.longitude
-      ).toFixed(4)}`
-    : ""}
+ {inspection.latitude != null &&
+inspection.longitude != null
+  ? ` · ${Number(inspection.latitude).toFixed(4)}, ${Number(
+      inspection.longitude
+    ).toFixed(4)}`
+  : ""}
 </span>
 
                   </div>
@@ -2087,7 +2164,7 @@ score: data.health.score,
             <div>
 
               <span className="section-label">
-                04 / INSPECTION ANALYTICS
+                05 / INSPECTION ANALYTICS
               </span>
 
               <h3>
