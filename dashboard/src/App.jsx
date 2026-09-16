@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 import {
   Activity,
@@ -128,12 +130,21 @@ function App() {
   useState(false);
   const markerRefs = useRef({});
   const [file, setFile] = useState(null);
+  const [showUploadOptions, setShowUploadOptions] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const cameraVideoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const analysisAbortControllerRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [roadName, setRoadName] = useState("");
   const [locationName, setLocationName] = useState("");
+  const [locationSkipped, setLocationSkipped] = useState(false);
+  const [skipLocationRequested, setSkipLocationRequested] = useState(false);
   const [mapPosition, setMapPosition] = useState([
     20.2961,
     85.8245,
@@ -258,7 +269,7 @@ function App() {
   const isImage = file?.type?.startsWith("image/");
   const isVideo = file?.type?.startsWith("video/");
 
-  const geocodeInspectionLocation = async () => {
+  const geocodeInspectionLocation = async (signal) => {
     const query = [roadName, locationName]
       .filter(Boolean)
       .join(", ")
@@ -274,7 +285,8 @@ function App() {
 
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=in&q=${encodeURIComponent(query)}`
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=in&q=${encodeURIComponent(query)}`,
+        { signal }
       );
 
       if (!response.ok) {
@@ -315,6 +327,112 @@ return null;
     setFile(selectedFile);
     setAnalysisResult(null);
     setError("");
+    setShowUploadOptions(false);
+    event.target.value = "";
+  };
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+
+    setShowCamera(false);
+  };
+
+  const openCamera = async () => {
+    setShowUploadOptions(false);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError(
+        "Camera access is not supported by this browser. Please use Files instead."
+      );
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+
+      cameraStreamRef.current = stream;
+      setShowCamera(true);
+    } catch (cameraError) {
+      console.error("Camera access failed:", cameraError);
+
+      setError(
+        "Unable to access the camera. Please allow camera permission or use Files instead."
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!showCamera || !cameraVideoRef.current || !cameraStreamRef.current) {
+      return;
+    }
+
+    cameraVideoRef.current.srcObject = cameraStreamRef.current;
+    cameraVideoRef.current.play().catch(() => {});
+
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
+      }
+    };
+  }, [showCamera]);
+
+  const captureCameraPhoto = () => {
+    const video = cameraVideoRef.current;
+
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      setError("Camera is not ready yet. Please try again.");
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      setError("Unable to capture the camera image.");
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setError("Unable to create the captured photo.");
+          return;
+        }
+
+        const capturedFile = new File(
+          [blob],
+          `roadvision_camera_${Date.now()}.jpg`,
+          { type: "image/jpeg" }
+        );
+
+        setFile(capturedFile);
+        setAnalysisResult(null);
+        setError("");
+        stopCamera();
+      },
+      "image/jpeg",
+      0.92
+    );
   };
 
   const handleImageAnalysis = async () => {
@@ -322,13 +440,25 @@ return null;
       return;
     }
 
+    if (!locationSkipped && !locationName.trim()) {
+      setError(
+        "Please enter the inspection location or choose 'I don't know the road or location'."
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    analysisAbortControllerRef.current = controller;
+
     setIsAnalyzing(true);
     setError("");
     setAnalysisResult(null);
     setShowReport(false);
 
     try {
-      const coordinates = await geocodeInspectionLocation();
+      const coordinates = await geocodeInspectionLocation(
+        controller.signal
+      );
       const formData = new FormData();
 
 formData.append("file", file);
@@ -339,6 +469,7 @@ formData.append("location_name", locationName);
         {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         }
       );
 
@@ -373,12 +504,20 @@ score: data.health.score,
         ...previous,
       ].slice(0, 10));
     } catch (err) {
+      if (err?.name === "AbortError") {
+        setError("Analysis cancelled.");
+        return;
+      }
+
       console.error(err);
 
       setError(
         "Unable to analyze the image. Make sure the RoadVision backend is running."
       );
     } finally {
+      if (analysisAbortControllerRef.current === controller) {
+        analysisAbortControllerRef.current = null;
+      }
       setIsAnalyzing(false);
     }
   };
@@ -388,13 +527,25 @@ score: data.health.score,
       return;
     }
 
+    if (!locationSkipped && !locationName.trim()) {
+      setError(
+        "Please enter the inspection location or choose 'I don't know the road or location'."
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    analysisAbortControllerRef.current = controller;
+
     setIsAnalyzing(true);
     setError("");
     setAnalysisResult(null);
     setShowReport(false);
 
     try {
-      const coordinates = await geocodeInspectionLocation();
+      const coordinates = await geocodeInspectionLocation(
+        controller.signal
+      );
       const formData = new FormData();
 
 formData.append("file", file);
@@ -406,6 +557,7 @@ formData.append("location_name", locationName);
         {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         }
       );
 
@@ -440,22 +592,48 @@ score: data.health.score,
         ...previous,
       ].slice(0, 10));
     } catch (err) {
+      if (err?.name === "AbortError") {
+        setError("Analysis cancelled.");
+        return;
+      }
+
       console.error(err);
 
       setError(
         "Unable to analyze the video. Make sure the RoadVision backend is running."
       );
     } finally {
+      if (analysisAbortControllerRef.current === controller) {
+        analysisAbortControllerRef.current = null;
+      }
       setIsAnalyzing(false);
     }
   };
 
+  const cancelAnalysis = () => {
+    if (!isAnalyzing) {
+      return;
+    }
+
+    analysisAbortControllerRef.current?.abort();
+  };
+
   const clearInspection = () => {
-  setFile(null);
-  setAnalysisResult(null);
-  setError("");
-  setShowReport(false);
-};
+    analysisAbortControllerRef.current?.abort();
+    analysisAbortControllerRef.current = null;
+    setIsAnalyzing(false);
+
+    stopCamera();
+    setShowUploadOptions(false);
+    setFile(null);
+    setAnalysisResult(null);
+    setError("");
+    setShowReport(false);
+    setRoadName("");
+    setLocationName("");
+    setLocationSkipped(false);
+    setSkipLocationRequested(false);
+  };
 
   /* =========================
      DOWNLOAD OUTPUT
@@ -515,6 +693,266 @@ score: data.health.score,
 
       setError(
         "Unable to download the analysis result."
+      );
+    }
+  };
+
+  /* =========================
+     DOWNLOAD REPORT AS PDF
+  ========================= */
+
+  const handleReportDownload = () => {
+    if (!analysisResult?.report) {
+      return;
+    }
+
+    try {
+      const report = analysisResult.report;
+      const health = report.road_condition || {};
+      const breakdown = report.damage_summary?.breakdown || {};
+      const detections = report.detections || {};
+
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 16;
+
+      // Header
+      doc.setFillColor(124, 58, 237);
+      doc.rect(0, 0, pageWidth, 4, "F");
+
+      doc.setTextColor(124, 58, 237);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("ROADVISION AI", margin, 15);
+
+      doc.setTextColor(30, 25, 36);
+      doc.setFontSize(22);
+      doc.text("Inspection Report", margin, 25);
+
+      doc.setTextColor(105, 98, 113);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(
+        "Intelligent Rural Road Condition & Infrastructure Monitoring System",
+        margin,
+        31
+      );
+
+      let y = 42;
+
+      const sectionTitle = (title) => {
+        doc.setTextColor(124, 58, 237);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(title.toUpperCase(), margin, y);
+        doc.setDrawColor(226, 221, 231);
+        doc.line(margin, y + 3, pageWidth - margin, y + 3);
+        y += 9;
+      };
+
+      const safe = (value) =>
+        String(value ?? "Not specified");
+
+      // Inspection details
+      sectionTitle("Inspection Details");
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        theme: "grid",
+        head: [["Field", "Details"]],
+        body: [
+          ["Inspection File", safe(report.inspection?.image)],
+          ["Inspection Date", safe(report.inspection?.date)],
+          ["Road / Route", safe(report.inspection?.road_name)],
+          ["Area / Village", safe(report.inspection?.location_name)],
+        ],
+        styles: {
+          font: "helvetica",
+          fontSize: 9,
+          cellPadding: 3.5,
+          textColor: [40, 35, 45],
+        },
+        headStyles: {
+          fillColor: [245, 242, 247],
+          textColor: [100, 92, 108],
+          fontStyle: "bold",
+        },
+        alternateRowStyles: {
+          fillColor: [250, 249, 251],
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 14;
+
+      // Road condition
+      sectionTitle("Road Condition");
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        theme: "grid",
+        head: [["Health Score", "Severity", "Maintenance Priority"]],
+        body: [[
+          `${safe(health.health_score)} / 100`,
+          safe(health.severity),
+          safe(health.maintenance_priority),
+        ]],
+        styles: {
+          font: "helvetica",
+          fontSize: 10,
+          cellPadding: 5,
+          textColor: [40, 35, 45],
+          halign: "center",
+        },
+        headStyles: {
+          fillColor: [124, 58, 237],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          halign: "center",
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 14;
+
+      // Damage summary
+      sectionTitle("Damage Summary");
+
+      const damageRows = Object.entries(breakdown).map(
+        ([defect, count]) => [defect, String(count)]
+      );
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        theme: "grid",
+        head: [["Detected Defect", "Count"]],
+        body: damageRows.length
+          ? damageRows
+          : [["No defects detected.", "0"]],
+        styles: {
+          font: "helvetica",
+          fontSize: 9,
+          cellPadding: 3.5,
+          textColor: [40, 35, 45],
+        },
+        headStyles: {
+          fillColor: [245, 242, 247],
+          textColor: [100, 92, 108],
+          fontStyle: "bold",
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 14;
+
+      // Detection details
+      sectionTitle("Detection Details");
+
+      const detectionRows = Array.isArray(detections)
+        ? detections.map((detection, index) => [
+            String(index + 1),
+            safe(detection.class),
+            `${(Number(detection.confidence) * 100).toFixed(1)}%`,
+          ])
+        : [];
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        theme: "grid",
+        head: [["#", "Detected Defect", "Confidence"]],
+        body: detectionRows.length
+          ? detectionRows
+          : [["-", "No individual detections recorded.", "-"]],
+        styles: {
+          font: "helvetica",
+          fontSize: 9,
+          cellPadding: 3.5,
+          textColor: [40, 35, 45],
+        },
+        headStyles: {
+          fillColor: [245, 242, 247],
+          textColor: [100, 92, 108],
+          fontStyle: "bold",
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 14;
+
+      // Recommendation
+      sectionTitle("AI Recommendation");
+
+      const recommendation = safe(
+        report.recommendation || "Further inspection recommended."
+      );
+
+      doc.setFillColor(255, 247, 240);
+      doc.setDrawColor(242, 139, 69);
+      doc.setLineWidth(1);
+      doc.rect(margin, y, pageWidth - margin * 2, 22, "FD");
+
+      doc.setTextColor(160, 76, 19);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("MAINTENANCE GUIDANCE", margin + 5, y + 7);
+
+      doc.setTextColor(62, 52, 60);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+
+      const recommendationLines = doc.splitTextToSize(
+        recommendation,
+        pageWidth - margin * 2 - 10
+      );
+
+      doc.text(recommendationLines, margin + 5, y + 13);
+
+      // Footer on every page
+      const pageCount = doc.getNumberOfPages();
+
+      for (let page = 1; page <= pageCount; page += 1) {
+        doc.setPage(page);
+
+        doc.setDrawColor(228, 223, 231);
+        doc.line(
+          margin,
+          285,
+          pageWidth - margin,
+          285
+        );
+
+        doc.setTextColor(129, 123, 133);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+
+        doc.text(
+          "Generated automatically by RoadVision AI · Prototype System",
+          pageWidth / 2,
+          290,
+          { align: "center" }
+        );
+      }
+
+      const originalName =
+        report.inspection?.image ||
+        "roadvision_inspection";
+
+      const baseName =
+        originalName.replace(/\.[^/.]+$/, "");
+
+      doc.save(
+        `${baseName}_roadvision_report.pdf`
+      );
+    } catch (error) {
+      console.error("PDF report download failed:", error);
+
+      setError(
+        "Unable to generate the PDF inspection report."
       );
     }
   };
@@ -1009,12 +1447,36 @@ score: data.health.score,
 
           <div className="upload-layout">
 
-            <label className="upload-box">
+            <div
+              className="upload-box"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const droppedFile = event.dataTransfer.files?.[0];
+
+                if (droppedFile) {
+                  setFile(droppedFile);
+                  setAnalysisResult(null);
+                  setError("");
+                }
+              }}
+            >
 
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*,video/*"
                 onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
+
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileChange}
+                style={{ display: "none" }}
               />
 
               <motion.div
@@ -1044,14 +1506,148 @@ score: data.health.score,
                   : "Drag & drop your file or browse from your device"}
               </p>
 
-              <span className="browse-button">
-                {file
-                  ? "Change File"
-                  : "Browse Files"}
-              </span>
+              <button
+                type="button"
+                className="browse-button"
+                onClick={() => setShowUploadOptions(true)}
+              >
+                {file ? "Change File" : "Browse Files"}
+              </button>
 
-            </label>
+            </div>
 
+            {showUploadOptions && (
+              <div
+                className="upload-options-overlay"
+                onClick={() => setShowUploadOptions(false)}
+              >
+                <motion.div
+                  className="upload-options-modal"
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="upload-options-header">
+                    <div>
+                      <span className="section-label">ROADVISION AI</span>
+                      <h4>Choose Media Source</h4>
+                      <p>Select how you want to provide road media.</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="upload-options-close"
+                      onClick={() => setShowUploadOptions(false)}
+                      aria-label="Close media source dialog"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="upload-options-grid">
+                    <button
+                      type="button"
+                      className="upload-option-card"
+                      onClick={openCamera}
+                    >
+                      <span className="upload-option-icon">
+                        <Camera size={24} />
+                      </span>
+                      <strong>Camera</strong>
+                      <span>Take a road photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="upload-option-card"
+                      onClick={openFilePicker}
+                    >
+                      <span className="upload-option-icon">
+                        <Upload size={24} />
+                      </span>
+                      <strong>Files</strong>
+                      <span>Choose image or video</span>
+                    </button>
+                  </div>
+
+                  <div className="upload-options-supported">
+                    <span>SUPPORTED</span>
+                    JPG · PNG · WEBP · MP4 · AVI · MOV
+                  </div>
+
+                  <button
+                    type="button"
+                    className="upload-options-cancel"
+                    onClick={() => setShowUploadOptions(false)}
+                  >
+                    Cancel
+                  </button>
+                </motion.div>
+              </div>
+            )}
+
+
+            {showCamera && (
+              <div
+                className="camera-overlay"
+                onClick={stopCamera}
+              >
+                <motion.div
+                  className="camera-modal"
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="camera-header">
+                    <div>
+                      <span className="section-label">ROADVISION AI</span>
+                      <h4>Capture Road Photo</h4>
+                      <p>Position the road inside the frame and take a photo.</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="upload-options-close"
+                      onClick={stopCamera}
+                      aria-label="Close camera"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="camera-preview">
+                    <video
+                      ref={cameraVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                    />
+                    <div className="camera-frame" aria-hidden="true" />
+                  </div>
+
+                  <div className="camera-actions">
+                    <button
+                      type="button"
+                      className="upload-options-cancel"
+                      onClick={stopCamera}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      className="camera-capture-button"
+                      onClick={captureCameraPhoto}
+                    >
+                      <Camera size={19} />
+                      Take Photo
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
 
             {file && (
               <motion.div
@@ -1106,10 +1702,21 @@ score: data.health.score,
 
 
           {file && isImage && (
-            <motion.button
+            <motion.div
               className="analyze-button"
-              onClick={handleImageAnalysis}
-              disabled={isAnalyzing}
+              onClick={!isAnalyzing ? handleImageAnalysis : undefined}
+              role="button"
+              tabIndex={isAnalyzing ? -1 : 0}
+              aria-disabled={isAnalyzing}
+              onKeyDown={(event) => {
+                if (
+                  !isAnalyzing &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  handleImageAnalysis();
+                }
+              }}
               whileHover={
                 !isAnalyzing
                   ? { y: -2 }
@@ -1126,6 +1733,18 @@ score: data.health.score,
                 <>
                   <span className="spinner" />
                   Running AI Inspection...
+                  <button
+                    type="button"
+                    className="analysis-cancel-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      cancelAnalysis();
+                    }}
+                    aria-label="Cancel image analysis"
+                  >
+                    <X size={16} />
+                    Cancel
+                  </button>
                 </>
               ) : (
                 <>
@@ -1135,15 +1754,26 @@ score: data.health.score,
                 </>
               )}
 
-            </motion.button>
+            </motion.div>
           )}
 
 
           {file && isVideo && (
-            <motion.button
+            <motion.div
               className="analyze-button"
-              onClick={handleVideoAnalysis}
-              disabled={isAnalyzing}
+              onClick={!isAnalyzing ? handleVideoAnalysis : undefined}
+              role="button"
+              tabIndex={isAnalyzing ? -1 : 0}
+              aria-disabled={isAnalyzing}
+              onKeyDown={(event) => {
+                if (
+                  !isAnalyzing &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  handleVideoAnalysis();
+                }
+              }}
               whileHover={
                 !isAnalyzing
                   ? { y: -2 }
@@ -1160,6 +1790,18 @@ score: data.health.score,
                 <>
                   <span className="spinner" />
                   Processing Video...
+                  <button
+                    type="button"
+                    className="analysis-cancel-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      cancelAnalysis();
+                    }}
+                    aria-label="Cancel video analysis"
+                  >
+                    <X size={16} />
+                    Cancel
+                  </button>
                 </>
               ) : (
                 <>
@@ -1169,7 +1811,7 @@ score: data.health.score,
                 </>
               )}
 
-            </motion.button>
+            </motion.div>
           )}
 
 
@@ -1195,71 +1837,125 @@ score: data.health.score,
             INSPECTION LOCATION
         ========================= */}
 
-        <section className="location-section">
+        {!locationSkipped && (
+          <motion.section
+            className={`location-section ${isAnalyzing ? "location-locked" : ""}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="section-heading">
+              <div>
+                <span className="section-label">
+                  01 / NEW INSPECTION · LOCATION
+                </span>
 
-          <div className="section-heading">
+                <h3>Inspection Location</h3>
 
-            <div>
+                <p>
+                  Add the road and area where this inspection was performed.
+                </p>
+              </div>
 
-              <span className="section-label">
-  01 / NEW INSPECTION · LOCATION
-</span>
-
-              <h3>
-                Inspection Location
-              </h3>
-
-              <p>
-                Add the road and area where this inspection was performed.
-              </p>
-
+              <MapPinned size={20} />
             </div>
 
-            <MapPinned size={20} />
+            <div className="location-card">
+              <div className="location-field">
+                <label>ROAD / ROUTE</label>
 
-          </div>
+                <input
+                  type="text"
+                  value={roadName}
+                  disabled={isAnalyzing}
+                  onChange={(event) =>
+                    setRoadName(event.target.value)
+                  }
+                  placeholder="e.g. NH Road, Village Road"
+                />
+              </div>
 
+              <div className="location-field">
+                <label>AREA / VILLAGE *</label>
 
-          <div className="location-card">
+                <input
+                  type="text"
+                  value={locationName}
+                  disabled={isAnalyzing}
+                  onChange={(event) =>
+                    setLocationName(event.target.value)
+                  }
+                  placeholder="e.g. Example Village, Odisha"
+                />
+              </div>
+            </div>
 
-            <div className="location-field">
+            <div className="location-bypass">
+              <label className="location-bypass-option">
+                <input
+                  type="checkbox"
+                  checked={skipLocationRequested}
+                  disabled={isAnalyzing}
+                  onChange={(event) => {
+                    if (isAnalyzing) return;
+                    setSkipLocationRequested(event.target.checked);
+                    setError("");
+                  }}
+                />
 
-              <label>
-                ROAD / ROUTE
+                <span>
+                  I don't know the road or location
+                </span>
               </label>
 
-              <input
-                type="text"
-                value={roadName}
-                onChange={(event) =>
-                  setRoadName(event.target.value)
-                }
-                placeholder="e.g. NH Road, Village Road"
-              />
+              <button
+                type="button"
+                className="location-bypass-button"
+                disabled={isAnalyzing || !skipLocationRequested}
+                onClick={() => {
+                  if (isAnalyzing) return;
+                  setLocationSkipped(true);
+                  setRoadName("");
+                  setLocationName("");
+                  setSkipLocationRequested(false);
+                  setError("");
+                }}
+              >
+                Continue without location
+              </button>
+            </div>
+          </motion.section>
+        )}
 
+        {locationSkipped && (
+          <motion.div
+            className={`location-skipped-card ${isAnalyzing ? "location-locked" : ""}`}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="location-skipped-info">
+              <MapPin size={18} />
+              <div>
+                <strong>Location skipped</strong>
+                <span>You can add the inspection location before analysis.</span>
+              </div>
             </div>
 
-
-            <div className="location-field">
-
-              <label>
-                AREA / VILLAGE
-              </label>
-
-              <input
-                type="text"
-                value={locationName}
-                onChange={(event) =>
-                  setLocationName(event.target.value)
-                }
-                placeholder="e.g. Example Village, Odisha"
-              />
-
-            </div>
-
-          </div>
-
-        </section>
+            <button
+              type="button"
+              className="location-use-button"
+              disabled={isAnalyzing}
+              onClick={() => {
+                if (isAnalyzing) return;
+                setLocationSkipped(false);
+                setSkipLocationRequested(false);
+                setError("");
+              }}
+            >
+              <MapPinned size={16} />
+              Use Location
+            </button>
+          </motion.div>
+        )}
 
         {/* =========================
             SYSTEM MODULES
@@ -2463,14 +3159,28 @@ inspection.longitude != null
 
           </div>
 
-          <button
-            className="report-close"
-            type="button"
-            onClick={() => setShowReport(false)}
-            title="Close report"
-          >
-            <X size={19} />
-          </button>
+          <div className="report-header-actions">
+
+            <button
+              className="report-download-button"
+              type="button"
+              onClick={handleReportDownload}
+              title="Download inspection report"
+            >
+              <Download size={16} />
+              <span>Download Report</span>
+            </button>
+
+            <button
+              className="report-close"
+              type="button"
+              onClick={() => setShowReport(false)}
+              title="Close report"
+            >
+              <X size={19} />
+            </button>
+
+          </div>
 
         </div>
 
