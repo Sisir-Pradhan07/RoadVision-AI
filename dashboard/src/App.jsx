@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -9,6 +10,7 @@ import {
   Camera,
   CheckCircle2,
   ClipboardList,
+  Copy,
   Download,
   FileText,
   Image as ImageIcon,
@@ -39,6 +41,9 @@ import "./App.css";
 
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+
+const SHARE_DESCRIPTION =
+  "RoadVision AI is an AI-powered road monitoring system designed to detect road defects, assess road health, and support smarter road maintenance decisions.";
 
 const createInspectionMarkerIcon = (severity) => {
   const normalizedSeverity =
@@ -121,7 +126,658 @@ function MapBoundsController({
   return null;
 }
 
+
+function PublicAnalysisPage({ inspectionId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const publicUrl = `${window.location.origin}/analysis/${inspectionId}`;
+
+  useEffect(() => {
+    const loadInspection = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/public/inspection/${inspectionId}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load inspection.");
+        }
+
+        const result = await response.json();
+
+        if (result.status !== "ok") {
+          throw new Error(result.message || "Inspection not found.");
+        }
+
+        setData(result);
+      } catch (err) {
+        console.error(err);
+        setError("This public inspection could not be found.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInspection();
+  }, [inspectionId]);
+
+  const absoluteMediaUrl = (path) => {
+    if (!path) return "";
+    return path.startsWith("http")
+      ? path
+      : `${API_BASE_URL}${path}`;
+  };
+
+  const downloadMedia = async () => {
+    if (!data?.inspection?.analyzed_media) return;
+
+    try {
+      const response = await fetch(
+        absoluteMediaUrl(data.inspection.analyzed_media)
+      );
+
+      if (!response.ok) throw new Error("Download failed.");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `${
+        data.inspection.filename.replace(/\.[^/.]+$/, "")
+      }_roadvision.${
+        data.inspection.media_type === "image" ? "jpg" : "mp4"
+      }`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Unable to download the analyzed media.");
+    }
+  };
+
+  const generatePublicReportPdf = () => {
+    if (!data?.report) return null;
+
+    const report = data.report;
+    const health = report.road_condition || {};
+    const breakdown = report.damage_summary?.breakdown || {};
+    const detections = Array.isArray(report.detections)
+      ? report.detections
+      : [];
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 16;
+
+    const safe = (value) =>
+      String(value ?? "Not specified");
+
+    doc.setFillColor(124, 58, 237);
+    doc.rect(0, 0, pageWidth, 4, "F");
+
+    doc.setTextColor(124, 58, 237);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("ROADVISION AI", margin, 15);
+
+    doc.setTextColor(30, 25, 36);
+    doc.setFontSize(22);
+    doc.text("Inspection Report", margin, 25);
+
+    doc.setTextColor(105, 98, 113);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(
+      "Intelligent Rural Road Condition & Infrastructure Monitoring System",
+      margin,
+      31
+    );
+
+    let y = 42;
+
+    const sectionTitle = (title) => {
+      doc.setTextColor(124, 58, 237);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(title.toUpperCase(), margin, y);
+      doc.setDrawColor(226, 221, 231);
+      doc.line(margin, y + 3, pageWidth - margin, y + 3);
+      y += 9;
+    };
+
+    sectionTitle("Inspection Details");
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["Field", "Details"]],
+      body: [
+        ["Inspection File", safe(report.inspection?.image)],
+        ["Inspection Date", safe(report.inspection?.date)],
+        ["Road / Route", safe(report.inspection?.road_name)],
+        ["Area / Village", safe(report.inspection?.location_name)],
+      ],
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 3.5,
+        textColor: [40, 35, 45],
+      },
+      headStyles: {
+        fillColor: [245, 242, 247],
+        textColor: [100, 92, 108],
+        fontStyle: "bold",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+    sectionTitle("Road Condition");
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["Health Score", "Severity", "Maintenance Priority"]],
+      body: [[
+        `${safe(health.health_score)} / 100`,
+        safe(health.severity),
+        safe(health.maintenance_priority),
+      ]],
+      styles: {
+        font: "helvetica",
+        fontSize: 10,
+        cellPadding: 5,
+        textColor: [40, 35, 45],
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [124, 58, 237],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        halign: "center",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+    sectionTitle("Damage Summary");
+
+    const damageRows = Object.entries(breakdown).map(
+      ([defect, count]) => [defect, String(count)]
+    );
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["Detected Defect", "Count"]],
+      body: damageRows.length
+        ? damageRows
+        : [["No defects detected.", "0"]],
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 3.5,
+        textColor: [40, 35, 45],
+      },
+      headStyles: {
+        fillColor: [245, 242, 247],
+        textColor: [100, 92, 108],
+        fontStyle: "bold",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+    sectionTitle("Detection Details");
+
+    const detectionRows = detections.map(
+      (detection, index) => [
+        String(index + 1),
+        safe(detection.class),
+        `${(Number(detection.confidence) * 100).toFixed(1)}%`,
+      ]
+    );
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["#", "Detected Defect", "Confidence"]],
+      body: detectionRows.length
+        ? detectionRows
+        : [["-", "No individual detections recorded.", "-"]],
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 3.5,
+        textColor: [40, 35, 45],
+      },
+      headStyles: {
+        fillColor: [245, 242, 247],
+        textColor: [100, 92, 108],
+        fontStyle: "bold",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+    sectionTitle("AI Recommendation");
+
+    doc.setFillColor(255, 247, 240);
+    doc.setDrawColor(242, 139, 69);
+    doc.rect(margin, y, pageWidth - margin * 2, 22, "FD");
+
+    doc.setTextColor(160, 76, 19);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("MAINTENANCE GUIDANCE", margin + 5, y + 7);
+
+    doc.setTextColor(62, 52, 60);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+
+    const recommendationLines = doc.splitTextToSize(
+      safe(report.recommendation),
+      pageWidth - margin * 2 - 10
+    );
+
+    doc.text(recommendationLines, margin + 5, y + 13);
+
+    for (let page = 1; page <= doc.getNumberOfPages(); page += 1) {
+      doc.setPage(page);
+      doc.setDrawColor(228, 223, 231);
+      doc.line(margin, 285, pageWidth - margin, 285);
+      doc.setTextColor(129, 123, 133);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text(
+        "Generated automatically by RoadVision AI · Prototype System",
+        pageWidth / 2,
+        290,
+        { align: "center" }
+      );
+    }
+
+    const baseName =
+      (report.inspection?.image || "roadvision_inspection")
+        .replace(/\.[^/.]+$/, "");
+
+    return {
+      blob: doc.output("blob"),
+      filename: `${baseName}_roadvision_report.pdf`,
+    };
+  };
+
+  const downloadReport = () => {
+    const pdf = generatePublicReportPdf();
+    if (!pdf) return;
+
+    const url = URL.createObjectURL(pdf.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = pdf.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyPublicUrl = async () => {
+    const shareText = `${SHARE_DESCRIPTION}
+
+View the complete inspection analysis:
+${publicUrl}`;
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      alert("Inspection link and description copied.");
+    } catch (err) {
+      console.error(err);
+      alert("Unable to copy the inspection link.");
+    }
+  };
+
+  const shareInspection = async () => {
+    const shareText = `${SHARE_DESCRIPTION}
+
+Inspection: ${
+      data?.inspection?.filename || "road inspection"
+    }
+Health Score: ${
+      data?.report?.road_condition?.health_score ?? "-"
+    }/100
+Severity: ${
+      data?.report?.road_condition?.severity || "Not specified"
+    }
+
+View the complete inspection analysis:`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "RoadVision AI Inspection",
+          text: shareText,
+          url: publicUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard?.writeText(
+        `${shareText}
+${publicUrl}`
+      );
+      alert("Public inspection link copied.");
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        console.error(err);
+      }
+    }
+  };
+
+  const shareWhatsApp = () => {
+    const message = `${SHARE_DESCRIPTION}
+
+Inspection: ${
+      data?.inspection?.filename || "Road inspection"
+    }
+Road: ${
+      data?.inspection?.road_name || "Not specified"
+    }
+Location: ${
+      data?.inspection?.location_name || "Not specified"
+    }
+Health Score: ${
+      data?.report?.road_condition?.health_score ?? "-"
+    }/100
+Severity: ${
+      data?.report?.road_condition?.severity || "Not specified"
+    }
+
+View the complete inspection analysis:
+${publicUrl}`;
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="public-analysis-page">
+        <div className="public-analysis-shell public-analysis-loading">
+          <div className="public-analysis-spinner" />
+          <h2>Loading RoadVision inspection...</h2>
+          <p>Retrieving the public analysis report.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="public-analysis-page">
+        <div className="public-analysis-shell public-analysis-empty">
+          <AlertTriangle size={32} />
+          <h2>Inspection not found</h2>
+          <p>The public RoadVision analysis link is invalid or unavailable.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const inspection = data.inspection;
+  const report = data.report;
+  const health = report.road_condition || {};
+  const breakdown = report.damage_summary?.breakdown || {};
+  const detections = Array.isArray(report.detections)
+    ? report.detections
+    : [];
+
+  const analyzedMedia = absoluteMediaUrl(inspection.analyzed_media);
+  const originalMedia = absoluteMediaUrl(inspection.original_media);
+  const isImageMedia = inspection.media_type === "image";
+
+  return (
+    <div className="public-analysis-page">
+      <header className="public-analysis-topbar">
+        <div className="public-analysis-brand">
+          <div className="public-analysis-brand-icon">
+            <Activity size={21} />
+          </div>
+          <div>
+            <strong>RoadVision AI</strong>
+            <span>Intelligent Road Monitoring</span>
+          </div>
+        </div>
+
+        <div className="public-analysis-actions">
+          <button type="button" onClick={shareInspection}>
+            <Share2 size={16} />
+            Share
+          </button>
+          <button type="button" onClick={shareWhatsApp}>
+            <span className="whatsapp-symbol" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17">
+                <path
+                  fill="currentColor"
+                  d="M20.5 3.5A11.85 11.85 0 0 0 12.08 0C5.5 0 .15 5.35.15 11.93c0 2.1.55 4.15 1.6 5.96L.05 24l6.25-1.64a11.9 11.9 0 0 0 5.77 1.48h.01c6.58 0 11.93-5.35 11.93-11.93 0-3.19-1.24-6.19-3.51-8.41Zm-8.42 16.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.71.98.99-3.62-.23-.37a9.87 9.87 0 1 1 8.35 4.6Zm5.42-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.39-1.48-.88-.78-1.48-1.75-1.65-2.05-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.49 1.7.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.69.25-1.28.17-1.41-.07-.12-.27-.2-.57-.35Z"
+                />
+              </svg>
+            </span>
+            WhatsApp
+          </button>
+        </div>
+      </header>
+
+      <main className="public-analysis-shell">
+        <section className="public-analysis-hero">
+          <span className="section-label">ROADVISION AI · PUBLIC INSPECTION</span>
+          <h1>Road Inspection Analysis</h1>
+          <p>
+            AI-powered road condition assessment with the original and
+            analyzed inspection media.
+          </p>
+          <div className="public-analysis-link">
+            <MapPin size={15} />
+            <span>{publicUrl}</span>
+            <button
+              type="button"
+              onClick={copyPublicUrl}
+              title="Copy inspection URL"
+            >
+              <Copy size={14} />
+              Copy URL
+            </button>
+          </div>
+        </section>
+
+        <section className="public-media-grid">
+          <div className="public-media-card">
+            <div className="public-card-heading">
+              <div>
+                <span>ORIGINAL MEDIA</span>
+                <strong>{inspection.filename}</strong>
+              </div>
+            </div>
+
+            <div className="public-media-frame">
+              {isImageMedia ? (
+                <img src={originalMedia} alt="Original road inspection" />
+              ) : (
+                <video src={originalMedia} controls playsInline />
+              )}
+            </div>
+          </div>
+
+          <div className="public-media-card analyzed">
+            <div className="public-card-heading">
+              <div>
+                <span>AI-ANALYZED MEDIA</span>
+                <strong>RoadVision V4 Detection</strong>
+              </div>
+              <ScanLine size={18} />
+            </div>
+
+            <div className="public-media-frame">
+              {isImageMedia ? (
+                <img src={analyzedMedia} alt="AI analyzed road inspection" />
+              ) : (
+                <video src={analyzedMedia} controls playsInline />
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="public-details-grid">
+          <div className="public-detail">
+            <span>ROAD / ROUTE</span>
+            <strong>{inspection.road_name || "Not specified"}</strong>
+          </div>
+          <div className="public-detail">
+            <span>AREA / VILLAGE</span>
+            <strong>{inspection.location_name || "Not specified"}</strong>
+          </div>
+          <div className="public-detail">
+            <span>INSPECTION DATE</span>
+            <strong>{report.inspection?.date || inspection.created_at}</strong>
+          </div>
+          <div className="public-detail">
+            <span>TOTAL DEFECTS</span>
+            <strong>{report.damage_summary?.total_defects ?? 0}</strong>
+          </div>
+        </section>
+
+        <section className="public-health-layout">
+          <div className="public-health-card">
+            <span>ROAD HEALTH SCORE</span>
+            <strong>{health.health_score ?? 0}</strong>
+            <small>/ 100</small>
+            <div className={`public-severity ${health.severity?.toLowerCase()}`}>
+              <span />
+              {health.severity || "Unknown"}
+            </div>
+          </div>
+
+          <div className="public-condition-card">
+            <span>MAINTENANCE PRIORITY</span>
+            <strong>{health.maintenance_priority || "Not specified"}</strong>
+            <p>
+              {report.recommendation || "Further inspection recommended."}
+            </p>
+          </div>
+        </section>
+
+        <section className="public-results-card">
+          <div className="public-section-heading">
+            <div>
+              <span>AI RESULTS</span>
+              <h2>Detected Road Defects</h2>
+            </div>
+            <AlertTriangle size={19} />
+          </div>
+
+          <div className="public-defect-list">
+            {Object.entries(breakdown).length > 0 ? (
+              Object.entries(breakdown).map(([defect, count]) => (
+                <div className="public-defect-row" key={defect}>
+                  <div>
+                    <span />
+                    <strong>{defect}</strong>
+                  </div>
+                  <strong>{count}</strong>
+                </div>
+              ))
+            ) : (
+              <div className="public-no-defects">No defects detected.</div>
+            )}
+          </div>
+
+          {detections.length > 0 && (
+            <div className="public-detection-list">
+              <span>DETECTION CONFIDENCE</span>
+              {detections.map((detection, index) => {
+                const confidence =
+                  Number(detection.confidence || 0) * 100;
+
+                return (
+                  <div className="public-detection-row" key={`${detection.class}-${index}`}>
+                    <div>
+                      <strong>{detection.class}</strong>
+                      <div className="public-confidence-bar">
+                        <div style={{ width: `${confidence}%` }} />
+                      </div>
+                    </div>
+                    <strong>{confidence.toFixed(1)}%</strong>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="public-action-card">
+          <div>
+            <span>SHAREABLE INSPECTION</span>
+            <h2>Use this permanent inspection link</h2>
+            <p>
+              Anyone with this link can view the saved RoadVision analysis.
+            </p>
+          </div>
+
+          <div className="public-action-buttons">
+            <button type="button" onClick={downloadMedia}>
+              <Download size={17} />
+              Download Analysis
+            </button>
+            <button type="button" onClick={downloadReport}>
+              <FileText size={17} />
+              Download Report
+            </button>
+            <button type="button" onClick={shareInspection}>
+              <Share2 size={17} />
+              Native Share
+            </button>
+            <button type="button" onClick={shareWhatsApp}>
+              <span className="whatsapp-symbol" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17">
+                <path
+                  fill="currentColor"
+                  d="M20.5 3.5A11.85 11.85 0 0 0 12.08 0C5.5 0 .15 5.35.15 11.93c0 2.1.55 4.15 1.6 5.96L.05 24l6.25-1.64a11.9 11.9 0 0 0 5.77 1.48h.01c6.58 0 11.93-5.35 11.93-11.93 0-3.19-1.24-6.19-3.51-8.41Zm-8.42 16.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.71.98.99-3.62-.23-.37a9.87 9.87 0 1 1 8.35 4.6Zm5.42-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.39-1.48-.88-.78-1.48-1.75-1.65-2.05-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.49 1.7.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.69.25-1.28.17-1.41-.07-.12-.27-.2-.57-.35Z"
+                />
+              </svg>
+            </span>
+              WhatsApp
+            </button>
+          </div>
+        </section>
+
+        <footer className="public-analysis-footer">
+          <ShieldCheck size={15} />
+          Generated automatically by RoadVision AI · Prototype System
+        </footer>
+      </main>
+    </div>
+  );
+}
+
 function App() {
+
+  const publicPathMatch = window.location.pathname.match(
+    /^\/analysis\/([^/]+)\/?$/
+  );
+
   const [selectedInspectionId, setSelectedInspectionId] =
   useState(null);
   const [mapSeverityFilter, setMapSeverityFilter] =
@@ -136,6 +792,14 @@ function App() {
   const cameraInputRef = useRef(null);
   const cameraVideoRef = useRef(null);
   const cameraStreamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordedBytesRef = useRef(0);
+  const recordingTimerRef = useRef(null);
+  const [cameraMode, setCameraMode] = useState("image");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordingSize, setRecordingSize] = useState(0);
   const analysisAbortControllerRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -317,6 +981,29 @@ return null;
     }
   };
 
+  const openSelectedMedia = () => {
+    if (!file) {
+      return;
+    }
+
+    const mediaUrl = URL.createObjectURL(file);
+    const link = document.createElement("a");
+
+    link.href = mediaUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    // Keep the object URL available while the new tab loads the media.
+    setTimeout(() => {
+      URL.revokeObjectURL(mediaUrl);
+    }, 60000);
+  };
+
   const handleFileChange = (event) => {
     const selectedFile = event.target.files?.[0];
 
@@ -335,7 +1022,17 @@ return null;
     fileInputRef.current?.click();
   };
 
-  const stopCamera = () => {
+  const MAX_RECORDING_MS = 60 * 1000;
+  const MAX_RECORDING_BYTES = 500 * 1024 * 1024;
+
+  const clearRecordingTimer = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const stopCameraStream = () => {
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach((track) => track.stop());
       cameraStreamRef.current = null;
@@ -344,7 +1041,40 @@ return null;
     if (cameraVideoRef.current) {
       cameraVideoRef.current.srcObject = null;
     }
+  };
 
+  const stopRecording = (reason = "manual") => {
+    clearRecordingTimer();
+
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+
+    if (reason === "manual") {
+      setIsRecording(false);
+    }
+  };
+
+  const stopCamera = () => {
+    clearRecordingTimer();
+
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
+
+    mediaRecorderRef.current = null;
+    recordedChunksRef.current = [];
+    recordedBytesRef.current = 0;
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    setRecordingSize(0);
+
+    stopCameraStream();
     setShowCamera(false);
   };
 
@@ -365,7 +1095,12 @@ return null;
       });
 
       cameraStreamRef.current = stream;
+      setCameraMode("image");
+      setIsRecording(false);
+      setRecordingSeconds(0);
+      setRecordingSize(0);
       setShowCamera(true);
+      setError("");
     } catch (cameraError) {
       console.error("Camera access failed:", cameraError);
 
@@ -384,12 +1119,173 @@ return null;
     cameraVideoRef.current.play().catch(() => {});
 
     return () => {
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-        cameraStreamRef.current = null;
-      }
+      clearRecordingTimer();
     };
   }, [showCamera]);
+
+  const selectCameraMode = (mode) => {
+    if (isRecording) {
+      return;
+    }
+
+    setCameraMode(mode);
+    setRecordingSeconds(0);
+    setRecordingSize(0);
+  };
+
+  const startRecording = () => {
+    if (!cameraStreamRef.current || isRecording) {
+      return;
+    }
+
+    if (!window.MediaRecorder) {
+      setError(
+        "Video recording is not supported by this browser. Please use Files instead."
+      );
+      return;
+    }
+
+    const supportedTypes = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+
+    const mimeType = supportedTypes.find((type) =>
+      MediaRecorder.isTypeSupported(type)
+    );
+
+    try {
+      const recorder = mimeType
+        ? new MediaRecorder(cameraStreamRef.current, { mimeType })
+        : new MediaRecorder(cameraStreamRef.current);
+
+      mediaRecorderRef.current = recorder;
+      recordedChunksRef.current = [];
+      recordedBytesRef.current = 0;
+
+      setRecordingSeconds(0);
+      setRecordingSize(0);
+      setIsRecording(true);
+
+      recorder.ondataavailable = (event) => {
+        if (!event.data || event.data.size === 0) {
+          return;
+        }
+
+        recordedChunksRef.current.push(event.data);
+        recordedBytesRef.current += event.data.size;
+
+        setRecordingSize(recordedBytesRef.current);
+
+        if (recordedBytesRef.current >= MAX_RECORDING_BYTES) {
+          stopRecording("size");
+        }
+      };
+
+      recorder.onstop = () => {
+        clearRecordingTimer();
+        setIsRecording(false);
+
+        const totalBytes = recordedBytesRef.current;
+
+        if (!recordedChunksRef.current.length) {
+          setError("No video was recorded. Please try again.");
+          return;
+        }
+
+        if (totalBytes > MAX_RECORDING_BYTES) {
+          recordedChunksRef.current = [];
+          recordedBytesRef.current = 0;
+          setRecordingSize(0);
+          setError(
+            "The recorded video exceeded the 500 MB limit. Please record a shorter or lower-resolution video."
+          );
+          return;
+        }
+
+        const blob = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || "video/webm",
+        });
+
+        const extension = blob.type.includes("webm") ? "webm" : "webm";
+        const recordedFile = new File(
+          [blob],
+          `roadvision_camera_${Date.now()}.${extension}`,
+          { type: blob.type || "video/webm" }
+        );
+
+        setFile(recordedFile);
+        setAnalysisResult(null);
+        setError("");
+        recordedChunksRef.current = [];
+        recordedBytesRef.current = 0;
+        setRecordingSize(0);
+
+        stopCameraStream();
+        setShowCamera(false);
+        setCameraMode("image");
+      };
+
+      recorder.onerror = () => {
+        clearRecordingTimer();
+        setIsRecording(false);
+        setError(
+          "Video recording failed. Please try again or use Files instead."
+        );
+      };
+
+      recorder.start(1000);
+
+      const startedAt = Date.now();
+
+      recordingTimerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        setRecordingSeconds(Math.min(elapsed, 60));
+
+        if (Date.now() - startedAt >= MAX_RECORDING_MS) {
+          stopRecording("time");
+        }
+      }, 250);
+    } catch (recordingError) {
+      console.error("Video recording failed:", recordingError);
+      setIsRecording(false);
+      setError(
+        "Unable to start video recording. Please try again or use Files instead."
+      );
+    }
+  };
+
+  const cancelRecording = () => {
+    clearRecordingTimer();
+
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = () => {
+        clearRecordingTimer();
+        mediaRecorderRef.current = null;
+        recordedChunksRef.current = [];
+        recordedBytesRef.current = 0;
+        setIsRecording(false);
+        setRecordingSeconds(0);
+        setRecordingSize(0);
+      };
+      recorder.stop();
+    } else {
+      setIsRecording(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearRecordingTimer();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      stopCameraStream();
+    };
+  }, []);
 
   const captureCameraPhoto = () => {
     const video = cameraVideoRef.current;
@@ -484,6 +1380,8 @@ formData.append("location_name", locationName);
       setAnalysisHistory((previous) => [
         {
           id: Date.now(),
+          inspectionId: data.inspection_id || null,
+          publicPath: data.public_path || null,
           filename: data.filename || file.name,
           type: "Image",
           roadName,
@@ -572,6 +1470,8 @@ formData.append("location_name", locationName);
       setAnalysisHistory((previous) => [
         {
           id: Date.now(),
+          inspectionId: data.inspection_id || null,
+          publicPath: data.public_path || null,
           filename: data.filename || file.name,
           type: "Video",
           roadName,
@@ -701,258 +1601,349 @@ score: data.health.score,
      DOWNLOAD REPORT AS PDF
   ========================= */
 
-  const handleReportDownload = () => {
+  const generateReportPdf = () => {
     if (!analysisResult?.report) {
-      return;
+      return null;
     }
 
-    try {
-      const report = analysisResult.report;
-      const health = report.road_condition || {};
-      const breakdown = report.damage_summary?.breakdown || {};
-      const detections = report.detections || {};
+    const report = analysisResult.report;
+    const health = report.road_condition || {};
+    const breakdown = report.damage_summary?.breakdown || {};
+    const detections = report.detections || {};
 
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 16;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 16;
 
-      // Header
-      doc.setFillColor(124, 58, 237);
-      doc.rect(0, 0, pageWidth, 4, "F");
+    doc.setFillColor(124, 58, 237);
+    doc.rect(0, 0, pageWidth, 4, "F");
 
+    doc.setTextColor(124, 58, 237);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("ROADVISION AI", margin, 15);
+
+    doc.setTextColor(30, 25, 36);
+    doc.setFontSize(22);
+    doc.text("Inspection Report", margin, 25);
+
+    doc.setTextColor(105, 98, 113);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(
+      "Intelligent Rural Road Condition & Infrastructure Monitoring System",
+      margin,
+      31
+    );
+
+    let y = 42;
+
+    const sectionTitle = (title) => {
       doc.setTextColor(124, 58, 237);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.text("ROADVISION AI", margin, 15);
+      doc.text(title.toUpperCase(), margin, y);
+      doc.setDrawColor(226, 221, 231);
+      doc.line(margin, y + 3, pageWidth - margin, y + 3);
+      y += 9;
+    };
 
-      doc.setTextColor(30, 25, 36);
-      doc.setFontSize(22);
-      doc.text("Inspection Report", margin, 25);
+    const safe = (value) =>
+      String(value ?? "Not specified");
 
-      doc.setTextColor(105, 98, 113);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(
-        "Intelligent Rural Road Condition & Infrastructure Monitoring System",
+    sectionTitle("Inspection Details");
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["Field", "Details"]],
+      body: [
+        ["Inspection File", safe(report.inspection?.image)],
+        ["Inspection Date", safe(report.inspection?.date)],
+        ["Road / Route", safe(report.inspection?.road_name)],
+        ["Area / Village", safe(report.inspection?.location_name)],
+      ],
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 3.5,
+        textColor: [40, 35, 45],
+      },
+      headStyles: {
+        fillColor: [245, 242, 247],
+        textColor: [100, 92, 108],
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: [250, 249, 251],
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+
+    sectionTitle("Road Condition");
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["Health Score", "Severity", "Maintenance Priority"]],
+      body: [[
+        `${safe(health.health_score)} / 100`,
+        safe(health.severity),
+        safe(health.maintenance_priority),
+      ]],
+      styles: {
+        font: "helvetica",
+        fontSize: 10,
+        cellPadding: 5,
+        textColor: [40, 35, 45],
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [124, 58, 237],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        halign: "center",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+
+    sectionTitle("Damage Summary");
+
+    const damageRows = Object.entries(breakdown).map(
+      ([defect, count]) => [defect, String(count)]
+    );
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["Detected Defect", "Count"]],
+      body: damageRows.length
+        ? damageRows
+        : [["No defects detected.", "0"]],
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 3.5,
+        textColor: [40, 35, 45],
+      },
+      headStyles: {
+        fillColor: [245, 242, 247],
+        textColor: [100, 92, 108],
+        fontStyle: "bold",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+
+    sectionTitle("Detection Details");
+
+    const detectionRows = Array.isArray(detections)
+      ? detections.map((detection, index) => [
+          String(index + 1),
+          safe(detection.class),
+          `${(Number(detection.confidence) * 100).toFixed(1)}%`,
+        ])
+      : [];
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      head: [["#", "Detected Defect", "Confidence"]],
+      body: detectionRows.length
+        ? detectionRows
+        : [["-", "No individual detections recorded.", "-"]],
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 3.5,
+        textColor: [40, 35, 45],
+      },
+      headStyles: {
+        fillColor: [245, 242, 247],
+        textColor: [100, 92, 108],
+        fontStyle: "bold",
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 14;
+
+    sectionTitle("AI Recommendation");
+
+    const recommendation = safe(
+      report.recommendation || "Further inspection recommended."
+    );
+
+    doc.setFillColor(255, 247, 240);
+    doc.setDrawColor(242, 139, 69);
+    doc.setLineWidth(1);
+    doc.rect(margin, y, pageWidth - margin * 2, 22, "FD");
+
+    doc.setTextColor(160, 76, 19);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("MAINTENANCE GUIDANCE", margin + 5, y + 7);
+
+    doc.setTextColor(62, 52, 60);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+
+    const recommendationLines = doc.splitTextToSize(
+      recommendation,
+      pageWidth - margin * 2 - 10
+    );
+
+    doc.text(recommendationLines, margin + 5, y + 13);
+
+    const pageCount = doc.getNumberOfPages();
+
+    for (let page = 1; page <= pageCount; page += 1) {
+      doc.setPage(page);
+
+      doc.setDrawColor(228, 223, 231);
+      doc.line(
         margin,
-        31
+        285,
+        pageWidth - margin,
+        285
       );
 
-      let y = 42;
-
-      const sectionTitle = (title) => {
-        doc.setTextColor(124, 58, 237);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.text(title.toUpperCase(), margin, y);
-        doc.setDrawColor(226, 221, 231);
-        doc.line(margin, y + 3, pageWidth - margin, y + 3);
-        y += 9;
-      };
-
-      const safe = (value) =>
-        String(value ?? "Not specified");
-
-      // Inspection details
-      sectionTitle("Inspection Details");
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        theme: "grid",
-        head: [["Field", "Details"]],
-        body: [
-          ["Inspection File", safe(report.inspection?.image)],
-          ["Inspection Date", safe(report.inspection?.date)],
-          ["Road / Route", safe(report.inspection?.road_name)],
-          ["Area / Village", safe(report.inspection?.location_name)],
-        ],
-        styles: {
-          font: "helvetica",
-          fontSize: 9,
-          cellPadding: 3.5,
-          textColor: [40, 35, 45],
-        },
-        headStyles: {
-          fillColor: [245, 242, 247],
-          textColor: [100, 92, 108],
-          fontStyle: "bold",
-        },
-        alternateRowStyles: {
-          fillColor: [250, 249, 251],
-        },
-      });
-
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Road condition
-      sectionTitle("Road Condition");
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        theme: "grid",
-        head: [["Health Score", "Severity", "Maintenance Priority"]],
-        body: [[
-          `${safe(health.health_score)} / 100`,
-          safe(health.severity),
-          safe(health.maintenance_priority),
-        ]],
-        styles: {
-          font: "helvetica",
-          fontSize: 10,
-          cellPadding: 5,
-          textColor: [40, 35, 45],
-          halign: "center",
-        },
-        headStyles: {
-          fillColor: [124, 58, 237],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          halign: "center",
-        },
-      });
-
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Damage summary
-      sectionTitle("Damage Summary");
-
-      const damageRows = Object.entries(breakdown).map(
-        ([defect, count]) => [defect, String(count)]
-      );
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        theme: "grid",
-        head: [["Detected Defect", "Count"]],
-        body: damageRows.length
-          ? damageRows
-          : [["No defects detected.", "0"]],
-        styles: {
-          font: "helvetica",
-          fontSize: 9,
-          cellPadding: 3.5,
-          textColor: [40, 35, 45],
-        },
-        headStyles: {
-          fillColor: [245, 242, 247],
-          textColor: [100, 92, 108],
-          fontStyle: "bold",
-        },
-      });
-
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Detection details
-      sectionTitle("Detection Details");
-
-      const detectionRows = Array.isArray(detections)
-        ? detections.map((detection, index) => [
-            String(index + 1),
-            safe(detection.class),
-            `${(Number(detection.confidence) * 100).toFixed(1)}%`,
-          ])
-        : [];
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: margin, right: margin },
-        theme: "grid",
-        head: [["#", "Detected Defect", "Confidence"]],
-        body: detectionRows.length
-          ? detectionRows
-          : [["-", "No individual detections recorded.", "-"]],
-        styles: {
-          font: "helvetica",
-          fontSize: 9,
-          cellPadding: 3.5,
-          textColor: [40, 35, 45],
-        },
-        headStyles: {
-          fillColor: [245, 242, 247],
-          textColor: [100, 92, 108],
-          fontStyle: "bold",
-        },
-      });
-
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Recommendation
-      sectionTitle("AI Recommendation");
-
-      const recommendation = safe(
-        report.recommendation || "Further inspection recommended."
-      );
-
-      doc.setFillColor(255, 247, 240);
-      doc.setDrawColor(242, 139, 69);
-      doc.setLineWidth(1);
-      doc.rect(margin, y, pageWidth - margin * 2, 22, "FD");
-
-      doc.setTextColor(160, 76, 19);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.text("MAINTENANCE GUIDANCE", margin + 5, y + 7);
-
-      doc.setTextColor(62, 52, 60);
+      doc.setTextColor(129, 123, 133);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
+      doc.setFontSize(7.5);
 
-      const recommendationLines = doc.splitTextToSize(
-        recommendation,
-        pageWidth - margin * 2 - 10
+      doc.text(
+        "Generated automatically by RoadVision AI · Prototype System",
+        pageWidth / 2,
+        290,
+        { align: "center" }
       );
+    }
 
-      doc.text(recommendationLines, margin + 5, y + 13);
+    const originalName =
+      report.inspection?.image ||
+      "roadvision_inspection";
 
-      // Footer on every page
-      const pageCount = doc.getNumberOfPages();
+    const baseName =
+      originalName.replace(/\.[^/.]+$/, "");
 
-      for (let page = 1; page <= pageCount; page += 1) {
-        doc.setPage(page);
+    return {
+      blob: doc.output("blob"),
+      filename: `${baseName}_roadvision_report.pdf`,
+    };
+  };
 
-        doc.setDrawColor(228, 223, 231);
-        doc.line(
-          margin,
-          285,
-          pageWidth - margin,
-          285
-        );
+  /* =========================
+     DOWNLOAD REPORT AS PDF
+  ========================= */
 
-        doc.setTextColor(129, 123, 133);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
+  const handleReportDownload = () => {
+    try {
+      const pdf = generateReportPdf();
 
-        doc.text(
-          "Generated automatically by RoadVision AI · Prototype System",
-          pageWidth / 2,
-          290,
-          { align: "center" }
-        );
+      if (!pdf) {
+        return;
       }
 
-      const originalName =
-        report.inspection?.image ||
-        "roadvision_inspection";
+      const blobUrl = URL.createObjectURL(pdf.blob);
+      const link = document.createElement("a");
 
-      const baseName =
-        originalName.replace(/\.[^/.]+$/, "");
+      link.href = blobUrl;
+      link.download = pdf.filename;
 
-      doc.save(
-        `${baseName}_roadvision_report.pdf`
-      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("PDF report download failed:", error);
 
       setError(
         "Unable to generate the PDF inspection report."
+      );
+    }
+  };
+
+  /* =========================
+     SHARE PDF REPORT
+  ========================= */
+
+  const handleReportShare = async () => {
+    try {
+      const pdf = generateReportPdf();
+
+      if (!pdf) {
+        return;
+      }
+
+      const pdfFile = new File(
+        [pdf.blob],
+        pdf.filename,
+        { type: "application/pdf" }
+      );
+
+      if (
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({ files: [pdfFile] })
+      ) {
+        await navigator.share({
+          title: "RoadVision AI Inspection Report",
+          text: `${SHARE_DESCRIPTION}
+
+Inspection report: ${
+            analysisResult.report.inspection?.image ||
+            "road inspection"
+          }
+
+RoadVision AI generated inspection report.`,
+          files: [pdfFile],
+        });
+
+        return;
+      }
+
+      if (navigator.clipboard) {
+        const blobUrl = URL.createObjectURL(pdf.blob);
+
+        await navigator.clipboard.writeText(
+          `${SHARE_DESCRIPTION}
+
+RoadVision AI generated this inspection report. Use Download Report to save the PDF file.`
+        );
+
+        URL.revokeObjectURL(blobUrl);
+
+        alert(
+          "Direct PDF sharing is not supported by this browser. The report is ready to download."
+        );
+
+        return;
+      }
+
+      alert(
+        "Direct PDF sharing is not supported by this browser. Please use Download Report."
+      );
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return;
+      }
+
+      console.error("PDF report share failed:", error);
+
+      setError(
+        "Unable to share the PDF inspection report."
       );
     }
   };
@@ -976,22 +1967,29 @@ score: data.health.score,
 
     const outputUrl = `${API_BASE_URL}${outputPath}`;
 
+    const shareText = `${SHARE_DESCRIPTION}
+
+Inspection: ${
+      analysisResult.filename || "Road inspection"
+    }
+
+View the analyzed road inspection result:`;
+
     try {
       if (navigator.share) {
         await navigator.share({
-          title:
-            "RoadVision AI Inspection Result",
-
-          text:
-            `RoadVision AI analysis result for ${analysisResult.filename}`,
-
+          title: "RoadVision AI Inspection Result",
+          text: shareText,
           url: outputUrl,
         });
       } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(outputUrl);
+        await navigator.clipboard.writeText(
+          `${shareText}
+${outputUrl}`
+        );
 
         alert(
-          "Output link copied to clipboard."
+          "Analysis link and description copied."
         );
       } else {
         alert(
@@ -1004,6 +2002,47 @@ score: data.health.score,
           "Share failed:",
           error
         );
+      }
+    }
+  };
+
+
+  const handlePublicShare = async () => {
+    const inspectionId = analysisResult?.inspection_id;
+
+    if (!inspectionId) {
+      setError("Public inspection link is not available for this result.");
+      return;
+    }
+
+    const publicUrl = `${window.location.origin}/analysis/${inspectionId}`;
+
+    const shareText = `${SHARE_DESCRIPTION}
+
+Inspection: ${
+      analysisResult.filename || "road inspection"
+    }
+
+View the complete inspection analysis:`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "RoadVision AI Inspection",
+          text: shareText,
+          url: publicUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard?.writeText(
+        `${shareText}
+${publicUrl}`
+      );
+      alert("Public inspection link copied.");
+    } catch (shareError) {
+      if (shareError?.name !== "AbortError") {
+        console.error("Public share failed:", shareError);
       }
     }
   };
@@ -1081,6 +2120,10 @@ score: data.health.score,
   const getSeverityClass = (severity) => {
     return severity?.toLowerCase() || "moderate";
   };
+
+  if (publicPathMatch) {
+    return <PublicAnalysisPage inspectionId={publicPathMatch[1]} />;
+  }
 
   return (
     <div className="app">
@@ -1422,7 +2465,7 @@ score: data.health.score,
             UPLOAD
         ========================= */}
 
-        <section className="inspection-section">
+        <section className="inspection-section" id="new-inspection">
 
           <div className="section-heading">
 
@@ -1516,12 +2559,13 @@ score: data.health.score,
 
             </div>
 
-            {showUploadOptions && (
-              <div
-                className="upload-options-overlay"
-                onClick={() => setShowUploadOptions(false)}
-              >
-                <motion.div
+            {showUploadOptions &&
+              createPortal(
+                <div
+                  className="upload-options-overlay"
+                  onClick={() => setShowUploadOptions(false)}
+                >
+                  <motion.div
                   className="upload-options-modal"
                   initial={{ opacity: 0, y: 12, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1583,75 +2627,160 @@ score: data.health.score,
                   >
                     Cancel
                   </button>
-                </motion.div>
-              </div>
-            )}
+                  </motion.div>
+                </div>,
+                document.body
+              )}
 
 
-            {showCamera && (
-              <div
-                className="camera-overlay"
-                onClick={stopCamera}
-              >
-                <motion.div
-                  className="camera-modal"
-                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={(event) => event.stopPropagation()}
+            {showCamera &&
+              createPortal(
+                <div
+                  className="camera-overlay"
+                  onClick={() => {
+                    if (!isRecording) {
+                      stopCamera();
+                    }
+                  }}
                 >
-                  <div className="camera-header">
-                    <div>
-                      <span className="section-label">ROADVISION AI</span>
-                      <h4>Capture Road Photo</h4>
-                      <p>Position the road inside the frame and take a photo.</p>
+                  <motion.div
+                    className="camera-modal"
+                    initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="camera-header">
+                      <div>
+                        <span className="section-label">ROADVISION AI</span>
+                        <h4>
+                          {cameraMode === "image"
+                            ? "Capture Road Photo"
+                            : "Record Road Video"}
+                        </h4>
+                        <p>
+                          {cameraMode === "image"
+                            ? "Position the road inside the frame and take a photo."
+                            : "Record up to 60 seconds or 500 MB. The video will not be analyzed automatically."}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="upload-options-close"
+                        onClick={stopCamera}
+                        disabled={isRecording}
+                        aria-label="Close camera"
+                      >
+                        <X size={18} />
+                      </button>
                     </div>
 
-                    <button
-                      type="button"
-                      className="upload-options-close"
-                      onClick={stopCamera}
-                      aria-label="Close camera"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
+                    <div className="camera-mode-switch">
+                      <button
+                        type="button"
+                        className={cameraMode === "image" ? "active" : ""}
+                        onClick={() => selectCameraMode("image")}
+                        disabled={isRecording}
+                      >
+                        <Camera size={16} />
+                        Image
+                      </button>
 
-                  <div className="camera-preview">
-                    <video
-                      ref={cameraVideoRef}
-                      autoPlay
-                      muted
-                      playsInline
-                    />
-                    <div className="camera-frame" aria-hidden="true" />
-                  </div>
+                      <button
+                        type="button"
+                        className={cameraMode === "video" ? "active" : ""}
+                        onClick={() => selectCameraMode("video")}
+                        disabled={isRecording}
+                      >
+                        <Video size={16} />
+                        Video
+                      </button>
+                    </div>
 
-                  <div className="camera-actions">
-                    <button
-                      type="button"
-                      className="upload-options-cancel"
-                      onClick={stopCamera}
-                    >
-                      Cancel
-                    </button>
+                    <div className="camera-preview">
+                      <video
+                        ref={cameraVideoRef}
+                        autoPlay
+                        muted
+                        playsInline
+                      />
+                      <div className="camera-frame" aria-hidden="true" />
 
-                    <button
-                      type="button"
-                      className="camera-capture-button"
-                      onClick={captureCameraPhoto}
-                    >
-                      <Camera size={19} />
-                      Take Photo
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
+                      {cameraMode === "video" && isRecording && (
+                        <div className="camera-recording-indicator">
+                          <span />
+                          REC · {recordingSeconds}s / 60s
+                          <small>
+                            {(recordingSize / (1024 * 1024)).toFixed(1)} MB / 500 MB
+                          </small>
+                        </div>
+                      )}
+                    </div>
+
+                    {cameraMode === "video" && !isRecording && (
+                      <div className="camera-limit-note">
+                        <span>MAXIMUM RECORDING</span>
+                        <strong>60 seconds · 500 MB</strong>
+                      </div>
+                    )}
+
+                    <div className="camera-actions">
+                      <button
+                        type="button"
+                        className="upload-options-cancel"
+                        onClick={isRecording ? cancelRecording : stopCamera}
+                      >
+                        {isRecording ? "Discard Recording" : "Cancel"}
+                      </button>
+
+                      {cameraMode === "image" ? (
+                        <button
+                          type="button"
+                          className="camera-capture-button"
+                          onClick={captureCameraPhoto}
+                        >
+                          <Camera size={19} />
+                          Take Photo
+                        </button>
+                      ) : isRecording ? (
+                        <button
+                          type="button"
+                          className="camera-capture-button recording"
+                          onClick={() => stopRecording("manual")}
+                        >
+                          <X size={19} />
+                          Stop Recording
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="camera-capture-button"
+                          onClick={startRecording}
+                        >
+                          <Video size={19} />
+                          Start Recording
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                </div>,
+                document.body
+              )}
 
             {file && (
               <motion.div
                 className="selected-file"
+                role="button"
+                tabIndex={0}
+                onClick={openSelectedMedia}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openSelectedMedia();
+                  }
+                }}
+                title="Open original media"
                 initial={{
                   opacity: 0,
                   x: 15,
@@ -1688,7 +2817,10 @@ score: data.health.score,
 
                 <button
                   className="clear-button"
-                  onClick={clearInspection}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    clearInspection();
+                  }}
                   type="button"
                   aria-label="Clear selected file"
                 >
@@ -2208,6 +3340,16 @@ score: data.health.score,
   <span>Report</span>
 </button>
 
+                        <button
+                          className="media-action-button public-share-media-button"
+                          type="button"
+                          onClick={handlePublicShare}
+                          title="Share public inspection page"
+                        >
+                          <Share2 size={15} />
+                          <span>Public Link</span>
+                        </button>
+
 
                         {/* VERSION */}
 
@@ -2488,7 +3630,7 @@ score: data.health.score,
     INSPECTION MAP
 ========================= */}
 
-<section className="map-section">
+<section className="map-section" id="inspection-map">
 
   <div className="section-heading">
 
@@ -2680,7 +3822,7 @@ score: data.health.score,
             ANALYSIS HISTORY
         ========================= */}
 
-        <section className="history-section">
+        <section className="history-section" id="analysis-history">
 
           <div className="section-heading">
 
@@ -2868,7 +4010,7 @@ inspection.longitude != null
             INSPECTION ANALYTICS
         ========================= */}
 
-        <section className="analytics-section">
+        <section className="analytics-section" id="inspection-analytics">
 
           <div className="section-heading">
 
@@ -3169,6 +4311,16 @@ inspection.longitude != null
             >
               <Download size={16} />
               <span>Download Report</span>
+            </button>
+
+            <button
+              className="report-share-button"
+              type="button"
+              onClick={handleReportShare}
+              title="Share PDF inspection report"
+            >
+              <Share2 size={16} />
+              <span>Share</span>
             </button>
 
             <button
@@ -3511,6 +4663,64 @@ inspection.longitude != null
       </motion.div>
     </div>
   )}
+
+
+        {/* =========================
+            QUICK LINKS / FOOTER
+        ========================= */}
+
+        <footer className="site-footer">
+
+          <div className="quick-links">
+
+            <div className="quick-links-heading">
+              <span className="section-label">
+                QUICK LINKS
+              </span>
+
+              <p>
+                Navigate through RoadVision AI
+              </p>
+            </div>
+
+            <nav className="quick-links-nav" aria-label="Quick links">
+
+              <a href="#new-inspection">
+                New Inspection
+              </a>
+
+              <a href="#inspection-map">
+                Inspection Map
+              </a>
+
+              <a href="#analysis-history">
+                Analysis History
+              </a>
+
+              <a href="#inspection-analytics">
+                Analytics
+              </a>
+
+            </nav>
+
+          </div>
+
+
+          <div className="site-footer-bottom">
+
+            <div className="footer-brand">
+              <strong>
+                RoadVision AI
+              </strong>
+
+              <span>
+                Intelligent Road Monitoring
+              </span>
+            </div>
+
+          </div>
+
+        </footer>
 
       </main>
 

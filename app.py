@@ -1,5 +1,7 @@
 from pathlib import Path
+import json
 import shutil
+import sqlite3
 import uuid
 
 from fastapi import FastAPI, File, Form, UploadFile
@@ -30,16 +32,92 @@ app.add_middleware(
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-
 OUTPUTS_DIR = Path("outputs")
 OUTPUTS_DIR.mkdir(exist_ok=True)
 
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+DATABASE_PATH = DATA_DIR / "roadvision.db"
+
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOAD_DIR)),
+    name="uploads",
+)
 
 app.mount(
     "/outputs",
     StaticFiles(directory=str(OUTPUTS_DIR)),
     name="outputs",
 )
+
+
+def init_database():
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inspections (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                media_type TEXT NOT NULL,
+                original_media TEXT NOT NULL,
+                analyzed_media TEXT NOT NULL,
+                road_name TEXT,
+                location_name TEXT,
+                report_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+
+
+init_database()
+
+
+def save_public_inspection(
+    *,
+    inspection_id,
+    filename,
+    media_type,
+    original_media,
+    analyzed_media,
+    road_name,
+    location_name,
+    report,
+    created_at,
+):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            INSERT INTO inspections (
+                id,
+                filename,
+                media_type,
+                original_media,
+                analyzed_media,
+                road_name,
+                location_name,
+                report_json,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                inspection_id,
+                filename,
+                media_type,
+                original_media,
+                analyzed_media,
+                road_name,
+                location_name,
+                json.dumps(report),
+                created_at,
+            ),
+        )
+        connection.commit()
 
 
 @app.get("/api/health")
@@ -57,8 +135,8 @@ async def analyze_image(
     location_name: str = Form(""),
 ):
     file_id = uuid.uuid4().hex
-
-    file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
+    safe_filename = Path(file.filename or "road_image").name
+    file_path = UPLOAD_DIR / f"{file_id}_{safe_filename}"
 
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -70,20 +148,40 @@ async def analyze_image(
     output_image = Path(result.save_dir) / file_path.name
 
     report = generate_report(
-    detections=detections,
-    health=health,
-    image_name=file.filename,
-)
+        detections=detections,
+        health=health,
+        image_name=safe_filename,
+    )
 
     report["inspection"]["road_name"] = road_name
     report["inspection"]["location_name"] = location_name
 
+    inspection_id = uuid.uuid4().hex
+    created_at = report["inspection"]["date"]
+
+    original_media = f"/uploads/{file_path.name}"
+    analyzed_media = f"/outputs/predictions/{output_image.name}"
+
+    save_public_inspection(
+        inspection_id=inspection_id,
+        filename=safe_filename,
+        media_type="image",
+        original_media=original_media,
+        analyzed_media=analyzed_media,
+        road_name=road_name,
+        location_name=location_name,
+        report=report,
+        created_at=created_at,
+    )
+
     return {
-        "filename": file.filename,
-        "output_image": f"/outputs/predictions/{output_image.name}",
+        "filename": safe_filename,
+        "output_image": analyzed_media,
         "detections": detections,
         "health": health,
         "report": report,
+        "inspection_id": inspection_id,
+        "public_path": f"/analysis/{inspection_id}",
     }
 
 
@@ -94,8 +192,8 @@ async def analyze_video_endpoint(
     location_name: str = Form(""),
 ):
     file_id = uuid.uuid4().hex
-
-    file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
+    safe_filename = Path(file.filename or "road_video").name
+    file_path = UPLOAD_DIR / f"{file_id}_{safe_filename}"
 
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -115,11 +213,80 @@ async def analyze_video_endpoint(
     report = generate_report(
         detections=result.get("detections", []),
         health=result["health"],
-        image_name=file.filename,
+        image_name=safe_filename,
     )
+
     report["inspection"]["road_name"] = road_name
     report["inspection"]["location_name"] = location_name
 
     result["report"] = report
 
+    inspection_id = uuid.uuid4().hex
+    created_at = report["inspection"]["date"]
+
+    original_media = f"/uploads/{file_path.name}"
+    analyzed_media = result["output_video"]
+
+    save_public_inspection(
+        inspection_id=inspection_id,
+        filename=safe_filename,
+        media_type="video",
+        original_media=original_media,
+        analyzed_media=analyzed_media,
+        road_name=road_name,
+        location_name=location_name,
+        report=report,
+        created_at=created_at,
+    )
+
+    result["inspection_id"] = inspection_id
+    result["public_path"] = f"/analysis/{inspection_id}"
+
     return result
+
+
+@app.get("/api/public/inspection/{inspection_id}")
+def get_public_inspection(inspection_id: str):
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+
+        row = connection.execute(
+            """
+            SELECT
+                id,
+                filename,
+                media_type,
+                original_media,
+                analyzed_media,
+                road_name,
+                location_name,
+                report_json,
+                created_at
+            FROM inspections
+            WHERE id = ?
+            """,
+            (inspection_id,),
+        ).fetchone()
+
+    if row is None:
+        return {
+            "status": "not_found",
+            "message": "Inspection not found.",
+        }
+
+    report = json.loads(row["report_json"])
+
+    return {
+        "status": "ok",
+        "inspection": {
+            "id": row["id"],
+            "filename": row["filename"],
+            "media_type": row["media_type"],
+            "original_media": row["original_media"],
+            "analyzed_media": row["analyzed_media"],
+            "road_name": row["road_name"],
+            "location_name": row["location_name"],
+            "created_at": row["created_at"],
+        },
+        "report": report,
+    }
