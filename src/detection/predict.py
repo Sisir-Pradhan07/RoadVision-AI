@@ -110,7 +110,7 @@ def nms(boxes, scores, iou_threshold=0.45):
     return keep
 
 
-def predict_image(image_path: str, confidence: float = 0.25):
+def predict_image(image_path: str, confidence: float = 0.10):
     """Run RoadVision ONNX detection and calculate road health."""
 
     image_path = Path(image_path)
