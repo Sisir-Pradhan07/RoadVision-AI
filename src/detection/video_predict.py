@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 from pathlib import Path
-from collections import defaultdict
 from math import sqrt
 
 import onnxruntime as ort
@@ -119,7 +118,10 @@ def letterbox(image, new_size=640):
 
     h, w = image.shape[:2]
 
-    scale = min(new_size / w, new_size / h)
+    scale = min(
+        new_size / w,
+        new_size / h,
+    )
 
     new_w = int(round(w * scale))
     new_h = int(round(h * scale))
@@ -190,15 +192,35 @@ def box_iou(box_a, box_b):
     inter_x2 = min(ax2, bx2)
     inter_y2 = min(ay2, by2)
 
-    inter_w = max(0, inter_x2 - inter_x1)
-    inter_h = max(0, inter_y2 - inter_y1)
+    inter_w = max(
+        0,
+        inter_x2 - inter_x1,
+    )
 
-    intersection = inter_w * inter_h
+    inter_h = max(
+        0,
+        inter_y2 - inter_y1,
+    )
 
-    area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
-    area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+    intersection = (
+        inter_w * inter_h
+    )
 
-    union = area_a + area_b - intersection
+    area_a = (
+        max(0, ax2 - ax1)
+        * max(0, ay2 - ay1)
+    )
+
+    area_b = (
+        max(0, bx2 - bx1)
+        * max(0, by2 - by1)
+    )
+
+    union = (
+        area_a
+        + area_b
+        - intersection
+    )
 
     if union <= 0:
         return 0.0
@@ -206,7 +228,10 @@ def box_iou(box_a, box_b):
     return intersection / union
 
 
-def nms_classwise(detections, iou_threshold=0.45):
+def nms_classwise(
+    detections,
+    iou_threshold=0.45,
+):
     """Perform NMS separately for each class."""
 
     if not detections:
@@ -222,7 +247,8 @@ def nms_classwise(detections, iou_threshold=0.45):
     for class_id in classes:
 
         class_detections = [
-            d for d in detections
+            d
+            for d in detections
             if d["class_id"] == class_id
         ]
 
@@ -247,7 +273,9 @@ def nms_classwise(detections, iou_threshold=0.45):
                 )
 
                 if iou < iou_threshold:
-                    remaining.append(detection)
+                    remaining.append(
+                        detection
+                    )
 
             class_detections = remaining
 
@@ -310,10 +338,25 @@ def postprocess(
         y2 = (y2 - pad_y) / scale
 
         # Clamp to original frame
-        x1 = max(0, min(original_w - 1, x1))
-        y1 = max(0, min(original_h - 1, y1))
-        x2 = max(0, min(original_w - 1, x2))
-        y2 = max(0, min(original_h - 1, y2))
+        x1 = max(
+            0,
+            min(original_w - 1, x1),
+        )
+
+        y1 = max(
+            0,
+            min(original_h - 1, y1),
+        )
+
+        x2 = max(
+            0,
+            min(original_w - 1, x2),
+        )
+
+        y2 = max(
+            0,
+            min(original_h - 1, y2),
+        )
 
         if x2 <= x1 or y2 <= y1:
             continue
@@ -333,7 +376,9 @@ def postprocess(
             ],
         })
 
-    return nms_classwise(detections)
+    return nms_classwise(
+        detections
+    )
 
 
 # ============================================================
@@ -373,7 +418,10 @@ class SimpleTracker:
                 if track_id in used_tracks:
                     continue
 
-                if track["class_id"] != detection["class_id"]:
+                if (
+                    track["class_id"]
+                    != detection["class_id"]
+                ):
                     continue
 
                 track_center = self.center(
@@ -381,9 +429,15 @@ class SimpleTracker:
                 )
 
                 distance = sqrt(
-                    (det_center[0] - track_center[0]) ** 2
+                    (
+                        det_center[0]
+                        - track_center[0]
+                    ) ** 2
                     +
-                    (det_center[1] - track_center[1]) ** 2
+                    (
+                        det_center[1]
+                        - track_center[1]
+                    ) ** 2
                 )
 
                 if distance > MAX_TRACK_DISTANCE:
@@ -394,11 +448,17 @@ class SimpleTracker:
                     detection["box"],
                 )
 
-                score = iou + (
-                    max(
-                        0,
-                        1 - distance / MAX_TRACK_DISTANCE
-                    ) * 0.3
+                score = (
+                    iou
+                    + (
+                        max(
+                            0,
+                            1
+                            - distance
+                            / MAX_TRACK_DISTANCE,
+                        )
+                        * 0.3
+                    )
                 )
 
                 if score > best_score:
@@ -408,6 +468,7 @@ class SimpleTracker:
             if best_id is None:
 
                 best_id = self.next_id
+
                 self.next_id += 1
 
                 self.tracks[best_id] = {
@@ -422,11 +483,14 @@ class SimpleTracker:
             track = self.tracks[best_id]
 
             track["box"] = detection["box"]
+
             track["frames_seen"] += 1
+
             track["max_confidence"] = max(
                 track["max_confidence"],
                 detection["confidence"],
             )
+
             track["missed"] = 0
 
             used_tracks.add(best_id)
@@ -436,17 +500,25 @@ class SimpleTracker:
             )
 
         # Increase missed count for unmatched tracks
-        for track_id in list(self.tracks.keys()):
+        for track_id in list(
+            self.tracks.keys()
+        ):
 
             if track_id not in used_tracks:
 
-                self.tracks[track_id]["missed"] += 1
+                self.tracks[
+                    track_id
+                ]["missed"] += 1
 
                 if (
-                    self.tracks[track_id]["missed"]
+                    self.tracks[
+                        track_id
+                    ]["missed"]
                     > MAX_MISSED_FRAMES
                 ):
-                    del self.tracks[track_id]
+                    del self.tracks[
+                        track_id
+                    ]
 
         return assignments
 
@@ -455,7 +527,9 @@ class SimpleTracker:
 # Health Preparation
 # ============================================================
 
-def prepare_health_detections(valid_tracks):
+def prepare_health_detections(
+    valid_tracks,
+):
     """Convert tracked defects into Road Health format."""
 
     detections = []
@@ -464,7 +538,9 @@ def prepare_health_detections(valid_tracks):
 
         detections.append({
             "class": defect["class"],
-            "confidence": defect["max_confidence"],
+            "confidence": defect[
+                "max_confidence"
+            ],
         })
 
     return detections
@@ -489,7 +565,9 @@ def analyze_video(
     # Validate video
     # --------------------------------------------------------
 
-    video_info = validate_video(video_path)
+    video_info = validate_video(
+        video_path
+    )
 
     # --------------------------------------------------------
     # Check model
@@ -506,10 +584,16 @@ def analyze_video(
 
     session = ort.InferenceSession(
         str(MODEL_PATH),
-        providers=["CPUExecutionProvider"],
+        providers=[
+            "CPUExecutionProvider"
+        ],
     )
 
-    input_name = session.get_inputs()[0].name
+    input_name = (
+        session
+        .get_inputs()[0]
+        .name
+    )
 
     # --------------------------------------------------------
     # Open video
@@ -529,11 +613,15 @@ def analyze_video(
     fps = video_info["fps"]
 
     width = int(
-        cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        cap.get(
+            cv2.CAP_PROP_FRAME_WIDTH
+        )
     )
 
     height = int(
-        cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        cap.get(
+            cv2.CAP_PROP_FRAME_HEIGHT
+        )
     )
 
     # --------------------------------------------------------
@@ -550,9 +638,12 @@ def analyze_video(
         / f"{video_path.stem}_tracked.mp4"
     )
 
-    # Try H264 first, then MPEG-4 fallback
+    # --------------------------------------------------------
+    # Render/Linux-friendly video encoder
+    # --------------------------------------------------------
+
     fourcc = cv2.VideoWriter_fourcc(
-        *"avc1"
+        *"mp4v"
     )
 
     writer = cv2.VideoWriter(
@@ -564,25 +655,11 @@ def analyze_video(
 
     if not writer.isOpened():
 
-        writer.release()
-
-        fourcc = cv2.VideoWriter_fourcc(
-            *"mp4v"
-        )
-
-        writer = cv2.VideoWriter(
-            str(output_path),
-            fourcc,
-            fps,
-            (width, height),
-        )
-
-    if not writer.isOpened():
-
         cap.release()
 
         raise RuntimeError(
-            "Unable to create output video."
+            "Unable to create output video "
+            "using mp4v codec."
         )
 
     # --------------------------------------------------------
@@ -613,8 +690,13 @@ def analyze_video(
         # Preprocess
         # ----------------------------------------------------
 
-        input_tensor, scale, pad_x, pad_y = (
-            preprocess_frame(frame)
+        (
+            input_tensor,
+            scale,
+            pad_x,
+            pad_y,
+        ) = preprocess_frame(
+            frame
         )
 
         # ----------------------------------------------------
@@ -660,8 +742,13 @@ def analyze_video(
                 detection["box"],
             )
 
-            class_name = detection["class"]
-            conf = detection["confidence"]
+            class_name = (
+                detection["class"]
+            )
+
+            conf = (
+                detection["confidence"]
+            )
 
             label = (
                 f"{class_name} "
@@ -697,9 +784,14 @@ def analyze_video(
             # Store tracked defect
             # ------------------------------------------------
 
-            if track_id not in tracked_defects:
+            if (
+                track_id
+                not in tracked_defects
+            ):
 
-                tracked_defects[track_id] = {
+                tracked_defects[
+                    track_id
+                ] = {
                     "class": class_name,
                     "frames_seen": 0,
                     "max_confidence": 0.0,
@@ -707,9 +799,12 @@ def analyze_video(
 
             tracked_defects[
                 track_id
-            ]["frames_seen"] = tracker.tracks[
-                track_id
-            ]["frames_seen"]
+            ]["frames_seen"] = (
+                tracker
+                .tracks[
+                    track_id
+                ]["frames_seen"]
+            )
 
             tracked_defects[
                 track_id
@@ -726,7 +821,10 @@ def analyze_video(
 
         cv2.putText(
             frame,
-            f"RoadVision AI | Frame {frame_number}",
+            (
+                f"RoadVision AI | "
+                f"Frame {frame_number}"
+            ),
             (20, 35),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.75,
@@ -750,16 +848,20 @@ def analyze_video(
 
     valid_tracks = {
         track_id: defect
-        for track_id, defect in tracked_defects.items()
-        if defect["frames_seen"] >= MIN_TRACK_FRAMES
+        for track_id, defect
+        in tracked_defects.items()
+        if defect["frames_seen"]
+        >= MIN_TRACK_FRAMES
     }
 
     # --------------------------------------------------------
     # Road Health
     # --------------------------------------------------------
 
-    health_detections = prepare_health_detections(
-        valid_tracks
+    health_detections = (
+        prepare_health_detections(
+            valid_tracks
+        )
     )
 
     health = calculate_road_health(
@@ -772,13 +874,23 @@ def analyze_video(
 
     return {
         "video": str(video_path),
-        "output_video": str(output_path),
-        "duration": video_info["duration"],
+        "output_video": str(
+            output_path
+        ),
+        "duration": video_info[
+            "duration"
+        ],
         "fps": fps,
         "frames_analyzed": frame_number,
-        "total_frame_detections": total_detections,
-        "raw_tracked_objects": len(tracked_defects),
-        "unique_tracked_objects": len(valid_tracks),
+        "total_frame_detections": (
+            total_detections
+        ),
+        "raw_tracked_objects": len(
+            tracked_defects
+        ),
+        "unique_tracked_objects": len(
+            valid_tracks
+        ),
         "tracked_defects": valid_tracks,
         "health": health,
     }
@@ -794,7 +906,8 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print(
-            "Usage: python -m src.detection.video_predict "
+            "Usage: "
+            "python -m src.detection.video_predict "
             "<video_path>"
         )
         raise SystemExit(1)
@@ -803,7 +916,9 @@ if __name__ == "__main__":
         sys.argv[1]
     )
 
-    print("\nRoadVision AI Video Analysis")
+    print(
+        "\nRoadVision AI Video Analysis"
+    )
     print("=" * 50)
 
     print(
