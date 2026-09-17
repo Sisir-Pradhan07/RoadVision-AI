@@ -337,9 +337,9 @@ def predict_image(image_path: str, confidence: float = 0.25):
     )
 
     output_path = (
-        OUTPUT_DIR
-        / f"{image_path.stem}_prediction.jpg"
-    )
+    OUTPUT_DIR
+    / image_path.name
+)
 
     cv2.imwrite(
         str(output_path),
