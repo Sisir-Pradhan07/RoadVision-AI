@@ -402,7 +402,7 @@ function PublicAnalysisPage({ inspectionId }) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
       doc.text(
-        "Generated automatically by RoadVision AI · Prototype System",
+        "Generated automatically by RoadVision AI",
         pageWidth / 2,
         290,
         { align: "center" }
@@ -630,7 +630,7 @@ ${publicUrl}`;
             <div className="public-card-heading">
               <div>
                 <span>AI-ANALYZED MEDIA</span>
-                <strong>RoadVision V4 Detection</strong>
+                <strong>RoadVision AI Detection</strong>
               </div>
               <ScanLine size={18} />
             </div>
@@ -770,7 +770,7 @@ ${publicUrl}`;
 
         <footer className="public-analysis-footer">
           <ShieldCheck size={15} />
-          Generated automatically by RoadVision AI · Prototype System
+          Generated automatically by RoadVision AI
         </footer>
       </main>
     </div>
@@ -1935,7 +1935,7 @@ score: data.health.score,
       doc.setFontSize(7.5);
 
       doc.text(
-        "Generated automatically by RoadVision AI · Prototype System",
+        "Generated automatically by RoadVision AI",
         pageWidth / 2,
         290,
         { align: "center" }
@@ -2533,7 +2533,7 @@ ${publicUrl}`
 
               <div>
                 <ShieldCheck size={16} />
-                <span>YOLO V4 Engine</span>
+                <span>YOLO11s + ONNX Runtime</span>
               </div>
 
               <div>
@@ -3262,7 +3262,7 @@ ${publicUrl}`
 
             <div className="module-content">
               <span>IMAGE ANALYSIS</span>
-              <strong>YOLO V4</strong>
+              <strong>YOLO11s + ONNX Runtime</strong>
             </div>
 
             <CheckCircle2
@@ -3284,7 +3284,7 @@ ${publicUrl}`
 
             <div className="module-content">
               <span>VIDEO TRACKING</span>
-              <strong>ByteTrack</strong>
+              <strong>IoU Object Tracking</strong>
             </div>
 
             <CheckCircle2
@@ -3428,7 +3428,7 @@ ${publicUrl}`
               </div>
 
               <p>
-                RoadVision V4 is detecting and
+                RoadVision AI is detecting and
                 classifying road defects...
               </p>
 
@@ -3532,7 +3532,7 @@ ${publicUrl}`
 
                         <div className="media-badge">
                           <ScanLine size={15} />
-                          V4 DETECTION
+                          AI DETECTION
                         </div>
 
                       </div>
