@@ -3,7 +3,7 @@ import json
 import shutil
 import sqlite3
 import uuid
-from fastapi.staticfiles import StaticFiles
+
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,23 +13,59 @@ from src.detection.predict import predict_image
 from src.detection.video_predict import analyze_video
 
 
+# ============================================================
+# RoadVision AI
+# ============================================================
+
 app = FastAPI(
     title="RoadVision AI",
     description="Intelligent Rural Road Condition & Infrastructure Monitoring System",
     version="1.0.0",
 )
 
+
+# ============================================================
+# Directories
+# ============================================================
+
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+OUTPUTS_DIR = Path("outputs")
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+
+PREDICTIONS_DIR = OUTPUTS_DIR / "predictions"
+PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+VIDEOS_DIR = OUTPUTS_DIR / "videos"
+VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DATABASE_PATH = DATA_DIR / "roadvision.db"
+
+
+# ============================================================
+# Static Files
+# ============================================================
+
 app.mount(
     "/outputs",
-    StaticFiles(directory="outputs"),
+    StaticFiles(directory=str(OUTPUTS_DIR)),
     name="outputs",
 )
 
 app.mount(
     "/uploads",
-    StaticFiles(directory="uploads"),
+    StaticFiles(directory=str(UPLOAD_DIR)),
     name="uploads",
 )
+
+
+# ============================================================
+# CORS
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,30 +80,9 @@ app.add_middleware(
 )
 
 
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-
-OUTPUTS_DIR = Path("outputs")
-OUTPUTS_DIR.mkdir(exist_ok=True)
-
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-
-DATABASE_PATH = DATA_DIR / "roadvision.db"
-
-
-app.mount(
-    "/uploads",
-    StaticFiles(directory=str(UPLOAD_DIR)),
-    name="uploads",
-)
-
-app.mount(
-    "/outputs",
-    StaticFiles(directory=str(OUTPUTS_DIR)),
-    name="outputs",
-)
-
+# ============================================================
+# Database
+# ============================================================
 
 def init_database():
     with sqlite3.connect(DATABASE_PATH) as connection:
@@ -91,6 +106,10 @@ def init_database():
 
 init_database()
 
+
+# ============================================================
+# Save Public Inspection
+# ============================================================
 
 def save_public_inspection(
     *,
@@ -135,6 +154,10 @@ def save_public_inspection(
         connection.commit()
 
 
+# ============================================================
+# Health Check
+# ============================================================
+
 @app.get("/api/health")
 def health_check():
     return {
@@ -143,6 +166,10 @@ def health_check():
     }
 
 
+# ============================================================
+# Image Analysis
+# ============================================================
+
 @app.post("/api/analyze/image")
 async def analyze_image(
     file: UploadFile = File(...),
@@ -150,17 +177,30 @@ async def analyze_image(
     location_name: str = Form(""),
 ):
     file_id = uuid.uuid4().hex
-    safe_filename = Path(file.filename or "road_image").name
-    file_path = UPLOAD_DIR / f"{file_id}_{safe_filename}"
+
+    safe_filename = Path(
+        file.filename or "road_image"
+    ).name
+
+    file_path = (
+        UPLOAD_DIR
+        / f"{file_id}_{safe_filename}"
+    )
 
     with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        shutil.copyfileobj(
+            file.file,
+            buffer,
+        )
 
     result, detections, health = predict_image(
         str(file_path)
     )
 
-    output_image = Path(result.save_dir) / file_path.name
+    output_image = (
+        Path(result.save_dir)
+        / file_path.name
+    )
 
     report = generate_report(
         detections=detections,
@@ -172,10 +212,16 @@ async def analyze_image(
     report["inspection"]["location_name"] = location_name
 
     inspection_id = uuid.uuid4().hex
+
     created_at = report["inspection"]["date"]
 
-    original_media = f"/uploads/{file_path.name}"
-    analyzed_media = f"/outputs/predictions/{output_image.name}"
+    original_media = (
+        f"/uploads/{file_path.name}"
+    )
+
+    analyzed_media = (
+        f"/outputs/predictions/{output_image.name}"
+    )
 
     save_public_inspection(
         inspection_id=inspection_id,
@@ -200,6 +246,10 @@ async def analyze_image(
     }
 
 
+# ============================================================
+# Video Analysis
+# ============================================================
+
 @app.post("/api/analyze/video")
 async def analyze_video_endpoint(
     file: UploadFile = File(...),
@@ -207,11 +257,21 @@ async def analyze_video_endpoint(
     location_name: str = Form(""),
 ):
     file_id = uuid.uuid4().hex
-    safe_filename = Path(file.filename or "road_video").name
-    file_path = UPLOAD_DIR / f"{file_id}_{safe_filename}"
+
+    safe_filename = Path(
+        file.filename or "road_video"
+    ).name
+
+    file_path = (
+        UPLOAD_DIR
+        / f"{file_id}_{safe_filename}"
+    )
 
     with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        shutil.copyfileobj(
+            file.file,
+            buffer,
+        )
 
     result = analyze_video(
         str(file_path)
@@ -237,9 +297,13 @@ async def analyze_video_endpoint(
     result["report"] = report
 
     inspection_id = uuid.uuid4().hex
+
     created_at = report["inspection"]["date"]
 
-    original_media = f"/uploads/{file_path.name}"
+    original_media = (
+        f"/uploads/{file_path.name}"
+    )
+
     analyzed_media = result["output_video"]
 
     save_public_inspection(
@@ -255,14 +319,24 @@ async def analyze_video_endpoint(
     )
 
     result["inspection_id"] = inspection_id
-    result["public_path"] = f"/analysis/{inspection_id}"
+
+    result["public_path"] = (
+        f"/analysis/{inspection_id}"
+    )
 
     return result
 
 
+# ============================================================
+# Public Inspection
+# ============================================================
+
 @app.get("/api/public/inspection/{inspection_id}")
-def get_public_inspection(inspection_id: str):
+def get_public_inspection(
+    inspection_id: str,
+):
     with sqlite3.connect(DATABASE_PATH) as connection:
+
         connection.row_factory = sqlite3.Row
 
         row = connection.execute(
@@ -289,7 +363,9 @@ def get_public_inspection(inspection_id: str):
             "message": "Inspection not found.",
         }
 
-    report = json.loads(row["report_json"])
+    report = json.loads(
+        row["report_json"]
+    )
 
     return {
         "status": "ok",
