@@ -8035,3 +8035,85 @@ html {
   display: block;
   border-radius: 50%;
 }
+
+/* =========================
+   ANALYSIS PROGRESS
+========================= */
+
+.analysis-progress-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.analysis-progress-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+}
+
+.analysis-progress-top > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-progress-top strong {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.analysis-progress-track {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.analysis-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #f28b45);
+  transition: width 0.25s ease;
+}
+
+.results-analysis-progress {
+  width: min(420px, 90%);
+  margin: 18px auto 4px;
+}
+
+.results-analysis-progress-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted, #b9bac8);
+}
+
+.results-analysis-progress-top strong {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.results-analysis-progress-track {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.results-analysis-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #f28b45);
+  transition: width 0.25s ease;
+}

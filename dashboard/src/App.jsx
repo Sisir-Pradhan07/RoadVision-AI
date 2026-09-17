@@ -808,6 +808,8 @@ function App() {
   const analysisAbortControllerRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisStage, setAnalysisStage] = useState("");
   const [error, setError] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [roadName, setRoadName] = useState("");
@@ -1336,6 +1338,110 @@ return null;
     );
   };
 
+  const runAnalysisRequest = (
+    endpoint,
+    formData,
+    controller,
+    mediaType
+  ) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.open("POST", `${API_BASE_URL}${endpoint}`);
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) {
+          setAnalysisProgress((previous) =>
+            Math.max(previous, 10)
+          );
+          setAnalysisStage(`Uploading ${mediaType}...`);
+          return;
+        }
+
+        const uploadProgress = Math.round(
+          (event.loaded / event.total) * 70
+        );
+
+        setAnalysisProgress(Math.min(uploadProgress, 70));
+        setAnalysisStage(
+          `Uploading ${mediaType}...`
+        );
+      };
+
+      xhr.upload.onload = () => {
+        setAnalysisProgress(70);
+        setAnalysisStage(
+          `AI is processing the ${mediaType.toLowerCase()}...`
+        );
+      };
+
+      xhr.onprogress = () => {
+        // The backend keeps the request open while inference is running.
+        // Keep the visible progress between 70% and 95% until the result arrives.
+        setAnalysisProgress((previous) =>
+          Math.min(Math.max(previous, 70), 95)
+        );
+        setAnalysisStage(
+          `AI is processing the ${mediaType.toLowerCase()}...`
+        );
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setAnalysisProgress(100);
+          setAnalysisStage("Analysis complete.");
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(
+              new Error("Invalid response from the RoadVision backend.")
+            );
+          }
+          return;
+        }
+
+        reject(
+          new Error(
+            `${mediaType} analysis failed with status ${xhr.status}.`
+          )
+        );
+      };
+
+      xhr.onerror = () => {
+        reject(
+          new Error(
+            `Unable to connect to the RoadVision backend for ${mediaType.toLowerCase()} analysis.`
+          )
+        );
+      };
+
+      xhr.onabort = () => {
+        const abortError = new Error("Analysis cancelled.");
+        abortError.name = "AbortError";
+        reject(abortError);
+      };
+
+      const handleAbort = () => {
+        if (xhr.readyState !== XMLHttpRequest.DONE) {
+          xhr.abort();
+        }
+      };
+
+      if (controller.signal.aborted) {
+        handleAbort();
+        return;
+      }
+
+      controller.signal.addEventListener(
+        "abort",
+        handleAbort,
+        { once: true }
+      );
+
+      xhr.send(formData);
+    });
+  };
+
   const handleImageAnalysis = async () => {
     if (!file || !isImage) {
       return;
@@ -1352,6 +1458,8 @@ return null;
     analysisAbortControllerRef.current = controller;
 
     setIsAnalyzing(true);
+    setAnalysisProgress(0);
+    setAnalysisStage("Preparing image...");
     setError("");
     setAnalysisResult(null);
     setShowReport(false);
@@ -1360,25 +1468,21 @@ return null;
       const coordinates = await geocodeInspectionLocation(
         controller.signal
       );
+      setAnalysisProgress(5);
+      setAnalysisStage("Preparing image for AI inspection...");
+
       const formData = new FormData();
 
-formData.append("file", file);
-formData.append("road_name", roadName);
-formData.append("location_name", locationName);
-      const response = await fetch(
-        `${API_BASE_URL}/api/analyze/image`,
-        {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        }
+      formData.append("file", file);
+      formData.append("road_name", roadName);
+      formData.append("location_name", locationName);
+
+      const data = await runAnalysisRequest(
+        "/api/analyze/image",
+        formData,
+        controller,
+        "Image"
       );
-
-      if (!response.ok) {
-        throw new Error("Image analysis failed.");
-      }
-
-      const data = await response.json();
 
       setAnalysisResult(data);
 
@@ -1422,6 +1526,8 @@ score: data.health.score,
         analysisAbortControllerRef.current = null;
       }
       setIsAnalyzing(false);
+      setAnalysisProgress(0);
+      setAnalysisStage("");
     }
   };
 
@@ -1441,6 +1547,8 @@ score: data.health.score,
     analysisAbortControllerRef.current = controller;
 
     setIsAnalyzing(true);
+    setAnalysisProgress(0);
+    setAnalysisStage("Preparing video...");
     setError("");
     setAnalysisResult(null);
     setShowReport(false);
@@ -1449,26 +1557,21 @@ score: data.health.score,
       const coordinates = await geocodeInspectionLocation(
         controller.signal
       );
+      setAnalysisProgress(5);
+      setAnalysisStage("Preparing video for AI inspection...");
+
       const formData = new FormData();
 
-formData.append("file", file);
-formData.append("road_name", roadName);
-formData.append("location_name", locationName);
+      formData.append("file", file);
+      formData.append("road_name", roadName);
+      formData.append("location_name", locationName);
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/analyze/video`,
-        {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        }
+      const data = await runAnalysisRequest(
+        "/api/analyze/video",
+        formData,
+        controller,
+        "Video"
       );
-
-      if (!response.ok) {
-        throw new Error("Video analysis failed.");
-      }
-
-      const data = await response.json();
 
       setAnalysisResult(data);
 
@@ -1512,6 +1615,8 @@ score: data.health.score,
         analysisAbortControllerRef.current = null;
       }
       setIsAnalyzing(false);
+      setAnalysisProgress(0);
+      setAnalysisStage("");
     }
   };
 
@@ -1527,6 +1632,8 @@ score: data.health.score,
     analysisAbortControllerRef.current?.abort();
     analysisAbortControllerRef.current = null;
     setIsAnalyzing(false);
+    setAnalysisProgress(0);
+    setAnalysisStage("");
 
     stopCamera();
     setShowUploadOptions(false);
@@ -2872,8 +2979,28 @@ ${publicUrl}`
 
               {isAnalyzing ? (
                 <>
-                  <span className="spinner" />
-                  Running AI Inspection...
+                  <div className="analysis-progress-content">
+                    <div className="analysis-progress-top">
+                      <span className="spinner" />
+                      <span>{analysisStage || "Running AI Inspection..."}</span>
+                      <strong>{analysisProgress}%</strong>
+                    </div>
+
+                    <div
+                      className="analysis-progress-track"
+                      role="progressbar"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={analysisProgress}
+                      aria-label="Image analysis progress"
+                    >
+                      <div
+                        className="analysis-progress-fill"
+                        style={{ width: `${analysisProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     className="analysis-cancel-button"
@@ -2929,8 +3056,28 @@ ${publicUrl}`
 
               {isAnalyzing ? (
                 <>
-                  <span className="spinner" />
-                  Processing Video...
+                  <div className="analysis-progress-content">
+                    <div className="analysis-progress-top">
+                      <span className="spinner" />
+                      <span>{analysisStage || "Processing Video..."}</span>
+                      <strong>{analysisProgress}%</strong>
+                    </div>
+
+                    <div
+                      className="analysis-progress-track"
+                      role="progressbar"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={analysisProgress}
+                      aria-label="Video analysis progress"
+                    >
+                      <div
+                        className="analysis-progress-fill"
+                        style={{ width: `${analysisProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     className="analysis-cancel-button"
@@ -3256,8 +3403,29 @@ ${publicUrl}`
               </div>
 
               <h4>
-                Analyzing road condition
+                {analysisStage || "Analyzing road condition"}
               </h4>
+
+              <div
+                className="results-analysis-progress"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={analysisProgress}
+                aria-label="Road analysis progress"
+              >
+                <div className="results-analysis-progress-top">
+                  <span>AI inspection progress</span>
+                  <strong>{analysisProgress}%</strong>
+                </div>
+
+                <div className="results-analysis-progress-track">
+                  <div
+                    className="results-analysis-progress-fill"
+                    style={{ width: `${analysisProgress}%` }}
+                  />
+                </div>
+              </div>
 
               <p>
                 RoadVision V4 is detecting and
