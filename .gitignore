@@ -37,3 +37,13 @@ test_road.jpg
 *.m4v
 *.mpeg
 *.mpg
+
+# RoadVision runtime data
+data/*.db
+data/sample/
+
+# Runtime uploads
+uploads/
+
+# Local video codec dependency
+openh264-2.5.0-win64.dll
