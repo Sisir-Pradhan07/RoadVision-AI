@@ -86,7 +86,7 @@ def calculate_iou(box, boxes):
     return intersection / (union + 1e-6)
 
 
-def nms(boxes, scores, iou_threshold=0.45):
+def nms(boxes, scores, iou_threshold=0.35):
     if len(boxes) == 0:
         return []
 
@@ -100,15 +100,79 @@ def nms(boxes, scores, iou_threshold=0.45):
         if len(order) == 1:
             break
 
+        remaining = order[1:]
+
         ious = calculate_iou(
             boxes[current],
-            boxes[order[1:]],
+            boxes[remaining],
         )
 
-        order = order[1:][ious < iou_threshold]
+        # Suppress normal overlapping duplicates
+        keep_mask = ious < iou_threshold
+
+        # Also suppress boxes substantially contained
+        # inside the stronger detection.
+        current_box = boxes[current]
+
+        current_area = max(
+            1.0,
+            (current_box[2] - current_box[0])
+            * (current_box[3] - current_box[1]),
+        )
+
+        for position, index in enumerate(remaining):
+            box = boxes[index]
+
+            intersection_x1 = max(
+                current_box[0],
+                box[0],
+            )
+            intersection_y1 = max(
+                current_box[1],
+                box[1],
+            )
+            intersection_x2 = min(
+                current_box[2],
+                box[2],
+            )
+            intersection_y2 = min(
+                current_box[3],
+                box[3],
+            )
+
+            intersection_width = max(
+                0,
+                intersection_x2 - intersection_x1,
+            )
+            intersection_height = max(
+                0,
+                intersection_y2 - intersection_y1,
+            )
+
+            intersection_area = (
+                intersection_width
+                * intersection_height
+            )
+
+            box_area = max(
+                1.0,
+                (box[2] - box[0])
+                * (box[3] - box[1]),
+            )
+
+            containment = (
+                intersection_area / box_area
+            )
+
+            if (
+                containment >= 0.80
+                and box_area < current_area
+            ):
+                keep_mask[position] = False
+
+        order = remaining[keep_mask]
 
     return keep
-
 
 def predict_image(image_path: str, confidence: float = 0.10):
     """Run RoadVision ONNX detection and calculate road health."""
