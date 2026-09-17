@@ -3,7 +3,7 @@ import json
 import shutil
 import sqlite3
 import uuid
-
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +19,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.mount(
+    "/outputs",
+    StaticFiles(directory="outputs"),
+    name="outputs",
+)
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory="uploads"),
+    name="uploads",
+)
 
 app.add_middleware(
     CORSMiddleware,
