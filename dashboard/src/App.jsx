@@ -40,7 +40,8 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 const SHARE_DESCRIPTION =
   "RoadVision AI is an AI-powered road monitoring system designed to detect road defects, assess road health, and support smarter road maintenance decisions.";
@@ -553,8 +554,12 @@ ${publicUrl}`;
     <div className="public-analysis-page">
       <header className="public-analysis-topbar">
         <div className="public-analysis-brand">
-          <div className="public-analysis-brand-icon">
-            <Activity size={21} />
+          <div className="public-analysis-brand-icon logo-image-wrap">
+            <img
+              src="/roadvision-logo.png"
+              alt="RoadVision AI"
+              className="roadvision-logo"
+            />
           </div>
           <div>
             <strong>RoadVision AI</strong>
@@ -2135,8 +2140,12 @@ ${publicUrl}`
       <header className="topbar">
         <div className="brand">
 
-          <div className="brand-icon">
-            <Activity size={22} />
+          <div className="brand-icon logo-image-wrap">
+            <img
+              src="/roadvision-logo.png"
+              alt="RoadVision AI"
+              className="roadvision-logo"
+            />
           </div>
 
           <div className="brand-copy">
